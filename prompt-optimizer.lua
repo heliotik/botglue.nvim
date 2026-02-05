@@ -329,6 +329,43 @@ return {
       end
     end
 
+    -- Unified operation runner
+    local function run_operation(opts)
+      local sel = get_visual_selection()
+      if not sel or sel.text == "" then
+        vim.notify("Нет выделенного текста", vim.log.levels.WARN)
+        return
+      end
+
+      capture_input(opts.input_title, function(user_input)
+        start_spinner(opts.spinner_msg)
+
+        local prompt = build_prompt(opts.prompt_template, sel.text, user_input)
+
+        call_claude(prompt, function(err, result)
+          vim.schedule(function()
+            if err then
+              stop_spinner("✗ " .. err, vim.log.levels.ERROR)
+              return
+            end
+
+            if not result or result == "" then
+              stop_spinner("⚠ Пустой ответ от Claude", vim.log.levels.WARN)
+              return
+            end
+
+            if opts.result_mode == ResultMode.REPLACE then
+              replace_selection(sel, result)
+              stop_spinner(opts.success_msg, vim.log.levels.INFO)
+            else
+              stop_spinner(nil)
+              show_result_window(result, opts.window_title)
+            end
+          end)
+        end)
+      end)
+    end
+
     -- Основная функция
     local function optimize_prompt()
       local sel = get_visual_selection()
