@@ -12,7 +12,11 @@ function M.start_spinner(message)
     100,
     vim.schedule_wrap(function()
       spinner_index = (spinner_index % #spinner_frames) + 1
-      vim.api.nvim_echo({ { spinner_frames[spinner_index] .. " " .. message, "Comment" } }, false, {})
+      vim.api.nvim_echo(
+        { { spinner_frames[spinner_index] .. " " .. message, "Comment" } },
+        false,
+        {}
+      )
     end)
   )
 end

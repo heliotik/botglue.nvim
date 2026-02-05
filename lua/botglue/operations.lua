@@ -37,7 +37,8 @@ function M.get_visual_selection()
     end
   end
 
-  local ok, lines = pcall(vim.api.nvim_buf_get_text, 0, start_line - 1, start_col, end_line - 1, end_col, {})
+  local ok, lines =
+    pcall(vim.api.nvim_buf_get_text, 0, start_line - 1, start_col, end_line - 1, end_col, {})
 
   if not ok then
     return nil
@@ -56,8 +57,15 @@ end
 function M.replace_selection(sel, new_text)
   local lines = vim.split(new_text, "\n")
 
-  local ok, err =
-    pcall(vim.api.nvim_buf_set_text, sel.bufnr, sel.start_line - 1, sel.start_col, sel.end_line - 1, sel.end_col, lines)
+  local ok, err = pcall(
+    vim.api.nvim_buf_set_text,
+    sel.bufnr,
+    sel.start_line - 1,
+    sel.start_col,
+    sel.end_line - 1,
+    sel.end_col,
+    lines
+  )
 
   if not ok then
     vim.notify("Failed to replace text: " .. tostring(err), vim.log.levels.ERROR)

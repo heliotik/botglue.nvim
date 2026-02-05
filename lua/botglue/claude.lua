@@ -60,7 +60,9 @@ function M.build_prompt(operation, selected_text, user_input, context)
   end
 
   if user_input and user_input ~= "" then
-    prompt = prompt .. "\n\nДополнительные указания от пользователя:\n" .. user_input
+    prompt = prompt
+      .. "\n\nДополнительные указания от пользователя:\n"
+      .. user_input
   end
 
   return prompt
