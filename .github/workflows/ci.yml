@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    env:
+      NVIM_VERSION: v0.10.0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Neovim
+        run: |
+          wget -q https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux64.tar.gz
+          tar xzf nvim-linux64.tar.gz
+          sudo mv nvim-linux64 /opt/nvim
+          sudo ln -s /opt/nvim/bin/nvim /usr/local/bin/nvim
+
+      - name: Install luarocks and luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y luarocks
+          sudo luarocks install luacheck
+
+      - name: Install stylua
+        run: |
+          wget -qO stylua.zip https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux-x86_64.zip
+          unzip stylua.zip
+          chmod +x stylua
+          sudo mv stylua /usr/local/bin/
+
+      - name: Install plenary.nvim
+        run: |
+          git clone --depth 1 https://github.com/nvim-lua/plenary.nvim.git ../plenary.nvim
+
+      - name: Run checks
+        run: make pr-ready
