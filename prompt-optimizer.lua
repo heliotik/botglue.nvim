@@ -366,40 +366,60 @@ return {
       end)
     end
 
-    -- Основная функция
+    -- Operation: Optimize prompt
     local function optimize_prompt()
-      local sel = get_visual_selection()
-      if not sel or sel.text == "" then
-        vim.notify("No text selected", vim.log.levels.WARN)
-        return
-      end
-
-      start_spinner("Optimizing prompt with Claude...")
-
-      local prompt = build_prompt(sel.text)
-
-      call_claude(prompt, function(err, result)
-        vim.schedule(function()
-          if err then
-            stop_spinner("✗ " .. err, vim.log.levels.ERROR)
-            return
-          end
-
-          if result and result ~= "" then
-            replace_selection(sel, result)
-            stop_spinner("✓ Prompt optimized!", vim.log.levels.INFO)
-          else
-            stop_spinner("⚠ Empty response from Claude", vim.log.levels.WARN)
-          end
-        end)
-      end)
+      run_operation({
+        prompt_template = PROMPTS.optimize,
+        result_mode = ResultMode.REPLACE,
+        input_title = " Оптимизация промта ",
+        spinner_msg = "Оптимизирую промт...",
+        success_msg = "✓ Промт оптимизирован!",
+      })
     end
 
-    -- Keymap для visual mode
-    -- Используем :<C-u> чтобы marks '< и '> были установлены перед вызовом функции
-    vim.keymap.set("x", "<leader>po", ":<C-u>lua _G.prompt_optimizer_run()<CR>", { desc = "Optimize prompt with Claude", silent = true })
+    -- Operation: Explain code
+    local function explain_code()
+      run_operation({
+        prompt_template = PROMPTS.explain,
+        result_mode = ResultMode.WINDOW,
+        input_title = " Объяснение кода ",
+        spinner_msg = "Анализирую код...",
+        window_title = " Объяснение ",
+      })
+    end
 
-    -- Expose function globally for keymap
-    _G.prompt_optimizer_run = optimize_prompt
+    -- Operation: Refactor code
+    local function refactor_code()
+      run_operation({
+        prompt_template = PROMPTS.refactor,
+        result_mode = ResultMode.REPLACE,
+        input_title = " Рефакторинг ",
+        spinner_msg = "Рефакторю код...",
+        success_msg = "✓ Код улучшен!",
+      })
+    end
+
+    -- Operation: Translate text
+    local function translate_text()
+      run_operation({
+        prompt_template = PROMPTS.translate,
+        result_mode = ResultMode.REPLACE,
+        input_title = " Перевод ",
+        spinner_msg = "Перевожу...",
+        success_msg = "✓ Переведено!",
+      })
+    end
+
+    -- Export functions globally for keymaps
+    _G.botglue_po = optimize_prompt
+    _G.botglue_pe = explain_code
+    _G.botglue_pr = refactor_code
+    _G.botglue_pt = translate_text
+
+    -- Keymaps for visual mode
+    vim.keymap.set("x", "<leader>po", ":<C-u>lua _G.botglue_po()<CR>", { desc = "Optimize prompt", silent = true })
+    vim.keymap.set("x", "<leader>pe", ":<C-u>lua _G.botglue_pe()<CR>", { desc = "Explain code", silent = true })
+    vim.keymap.set("x", "<leader>pr", ":<C-u>lua _G.botglue_pr()<CR>", { desc = "Refactor code", silent = true })
+    vim.keymap.set("x", "<leader>pt", ":<C-u>lua _G.botglue_pt()<CR>", { desc = "Translate text", silent = true })
   end,
 }
