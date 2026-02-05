@@ -241,33 +241,26 @@ return {
       }
     end
 
-    -- Формирование промпта с контекстом проекта
-    local function build_prompt(selected_text)
+    -- Build prompt with context and optional user input
+    local function build_prompt(template, selected_text, user_input)
       local cwd = vim.fn.getcwd()
       local project_name = vim.fn.fnamemodify(cwd, ":t")
       local file_path = vim.fn.expand("%:.")
       local filetype = vim.bo.filetype
 
-      return string.format(
-        [[
-Оптимизируй промт ниже для получения лучшего результата.
-Исправь ошибки. Добавь контекста к задаче.
-Верни ТОЛЬКО улучшенный текст промта, без пояснений и комментариев.
+      -- Translate template doesn't use context (only 1 format placeholder)
+      local prompt
+      if template == PROMPTS.translate then
+        prompt = string.format(template, selected_text)
+      else
+        prompt = string.format(template, project_name, file_path, filetype, selected_text)
+      end
 
-Контекст:
-- Проект: %s
-- Файл: %s
-- Тип файла: %s
+      if user_input and user_input ~= "" then
+        prompt = prompt .. "\n\nДополнительные указания от пользователя:\n" .. user_input
+      end
 
-<prompt>
-%s
-</prompt>
-]],
-        project_name,
-        file_path,
-        filetype,
-        selected_text
-      )
+      return prompt
     end
 
     -- Async вызов Claude Code CLI через stdin
