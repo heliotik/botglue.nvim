@@ -1,3 +1,4 @@
+
 # Neovim-плагин для оптимизации промтов через Claude Code CLI
 
 ## Описание проекта
@@ -77,6 +78,178 @@ botglue.nvim/
 - В отличие от «виб‑кодинга» с большими агентами, пользователь сам решает, какой кусок кода отдавать модели и когда остановиться; 99 не лезет в другие файлы, пока его явно не попросили. [x](https://x.com/ThePrimeagen/status/2006382336527520236)
 - За счёт AGENT.md и skills команда разработки может стандартизировать поведение AI: разные люди вызывают 99, но получают решения в одном стиле и в рамках общих правил проекта. [github](https://github.com/ThePrimeagen/99/blob/master/AGENTS.md)
 
+# План от перплексити
+
+## 1. Пользовательский сценарий (UX)
+
+1. Visual‑выделение кода в любом буфере.  
+2. Нажатие хоткея (например, `<leader>op`) → открывается минимальное prompt‑окно (float или `vim.ui.input`).  
+3. Пользователь вводит простой промт (например, «оптимизируй промт под Claude Code», «перепиши как system prompt»).  
+4. Плагин собирает: системный промт (из файла / конфига), пользовательский промт, выделенный текст → дергает `claude` CLI в non‑interactive режиме. [platform.claude](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompt-improver)
+5. Результат либо:
+   - заменяет выделенный текст,  
+   - вставляется в новый сплит/буфер (режим «preview»),  
+   - копируется в регистр/clipboard.  
+
+На первом этапе можно сделать только «заменить выделенное» + опциональный просмотр через `vim.notify`. [perplexity](https://www.perplexity.ai/search/e0bbb433-b42a-4841-bce1-862c411605cb)
+
+## 2. Архитектура плагина
+
+Опираемся на 3 слоя (по мотивам 99 и `nvim-plugin-template`): [github](https://github.com/ThePrimeagen/99)
+
+1. **UI‑слой** (prompt‑окно, команды, keymaps)  
+   - Модуль `botglue.ui` (или прямо в `prompt-optimizer.lua` на старте).  
+   - Использовать `vim.ui.input` или свой float (позже можно заменить на `noice.nvim`/`snacks` интеграцию).  
+
+2. **Core‑слой** (работа с выделением и буферами)  
+   - Функции: `get_visual_selection()`, `replace_visual_selection(text)`, `open_output_split(text)`.  
+   - Работа только через `vim.api.nvim_buf_get_text`, `vim.api.nvim_buf_set_text`, `vim.fn.getpos("'<")`.  
+
+3. **CLI‑адаптер** (обертка над Claude Code CLI)  
+   - Модуль `botglue.claude_cli` с функцией:  
+     ```lua
+     M.run(opts) -- { prompt, system_prompt, input_text } -> callback(result)
+     ```  
+   - Использовать `vim.system({ "claude", ... }, { text = true, stdin = input_text }, cb)`; на старте можно синхронно через `vim.fn.system()` для MVP. [arize](https://arize.com/blog/claude-md-best-practices-learned-from-optimizing-claude-code-with-prompt-learning/)
+
+Файл‑структура в духе `nvim-plugin-template`: [github](https://github.com/ellisonleao/nvim-plugin-template)
+
+```text
+lua/
+  botglue/
+    prompt_optimizer.lua   -- основной модуль
+    core.lua               -- выборка/вставка текста
+    cli.lua                -- работа с claude CLI
+    config.lua             -- system prompt, настройки CLI
+plugin/
+  botglue.lua              -- регистрация команд и keymaps
+prompt-optimizer-mcp.json  -- MCP-конфиг (позже)
+README.md
+```
+
+## 3. Первый инкремент (MVP)
+
+Цель: один рабочий happy‑path без лишнего UI. [perplexity](https://www.perplexity.ai/search/e0bbb433-b42a-4841-bce1-862c411605cb)
+
+1. **Core: выборка и замена**
+
+   - Реализовать `get_visual_selection()` и `replace_visual_selection(new_text)`.  
+   - Сначала считать только `v` и `V` режимы, без block‑selection.  
+
+2. **CLI‑вызов**
+
+   - Хардкод: `CLAUDE_BIN = "claude"`; позже вынести в конфиг.  
+   - Вариант вызова (пример):
+
+     ```lua
+     local cmd = {
+       CLAUDE_BIN,
+       "code",
+       "--append-system-prompt", system_prompt,
+       "--output-format", "text",
+       "--mode", "non-interactive",
+     }
+     vim.system(cmd, { text = true, stdin = full_prompt }, function(res)
+       -- res.stdout -> результат
+     end)
+     ```
+
+     Детали флагов подровняем под реальную CLI‑схему (по аналогии с prompt‑optimizer hook’ами и `--append-system-prompt`). [github](https://github.com/johnpsasser/claude-code-prompt-optimizer)
+
+3. **Команда/функция**
+
+   - В `prompt-optimizer.lua`:
+
+     ```lua
+     function M.optimize_selection()
+       local sel = core.get_visual_selection()
+       if not sel or sel == "" then return end
+
+       vim.ui.input({ prompt = "botglue prompt: " }, function(user_prompt)
+         if not user_prompt or user_prompt == "" then return end
+         cli.run({
+           prompt = user_prompt,
+           system_prompt = config.get_system_prompt(),
+           input_text = sel,
+           on_result = function(out)
+             core.replace_visual_selection(out)
+           end,
+         })
+       end)
+     end
+     ```
+
+   - В `plugin/botglue.lua`: команда `:BotglueOptimize` + mapping `<leader>op` в visual‑режиме.  
+
+## 4. Конфиг и системный промт
+
+Хочется сразу заложить идею «оптимизировать промт, а не код». [github](https://github.com/johnpsasser/claude-code-prompt-optimizer)
+
+1. **config.lua**
+
+   - Опции:
+     - `system_prompt` (строка или функция, читающая файл).  
+     - `claude_bin` (путь к CLI).  
+     - `strategy` (replace / split / yank).  
+
+   - `setup(opts)` с merge по таблице.
+
+2. **Файл с правилами**
+
+   Варианты:
+
+   - `prompt-optimizer-mcp.json`: хранить там MCP‑настройки + массив правил/стилей.  
+   - Либо `CLAUDE_PROMPT.md`/`BOTGLUE.md` по аналогии с `AGENT.md` в 99, чтобы Claude Code уже был натренирован на эти правила. [github](https://github.com/ThePrimeagen/99/blob/master/AGENTS.md)
+
+   На первом шаге: просто обычная строка в `config.lua` с базовым системным промтом «ты помощник, который переписывает промты для Claude Code…».
+
+## 5. Расширения после MVP
+
+Когда базовый one‑shot работает: [byteiota](https://byteiota.com/theprimeagens-99-hits-542-stars-day-ai-for-skilled-devs/)
+
+1. **Режимы применения результата**
+
+   - `replace` (по умолчанию).  
+   - `preview_split` — открыть новый вертикальный сплит с результатом.  
+   - `copy_only` — положить в unnamed/`+` регистр без изменения буфера.  
+
+2. **Шаблоны промтов**
+
+   - Простая таблица в конфиге:  
+     ```lua
+     templates = {
+       optimize = "Оптимизируй этот промт для Claude Code",
+       system = "Сделай из этого хороший system prompt",
+       explain = "Объясни как работает этот промт",
+     }
+     ```  
+   - Команда `:BotglueTemplate` с `vim.ui.select`, либо keymaps типа `<leader>oo` (optimize), `<leader>os` (system).  
+
+3. **Интеграция с MCP / Claude Code hook’ами**
+
+   - Связать `prompt-optimizer-mcp.json` с тем, как Claude Code CLI подхватывает system prompt/skills (по мотивам prompt‑optimizer hook и `--append-system-prompt`). [arize](https://arize.com/blog/claude-md-best-practices-learned-from-optimizing-claude-code-with-prompt-learning/)
+   - Опционально: сделать режим «генерируй новый system prompt и автоматически обнови MCP‑файл».  
+
+4. **Более «99‑подобный» UX**
+
+   - Добавить небольшой float‑prompt в стиле 99 (окно посередине, история последних промтов). [reddit](https://www.reddit.com/r/theprimeagen/comments/1qs403e/didnt_get_the_idea_behind_99_prompt_plugin/)
+   - Вынести контекст (имя файла, язык, путь к проекту) в промт, как это делает 99 через AGENT.md. [github](https://github.com/ThePrimeagen/99/blob/master/AGENTS.md)
+
+## 6. Практические next steps для тебя
+
+Предлагаю такой порядок:
+
+1) В `botglue.nvim/prompt-optimizer.lua` выпилить всё лишнее и сделать один экспортируемый метод `optimize_selection()` по схеме из MVP.  
+2) Вынести в отдельные модули `core.lua` и `cli.lua`, даже если внутри по 20 строк — для будущего роста.  
+3) Жёстко захардкодить простейший system prompt и вызов `claude` CLI, пока не трогаешь MCP/JSON.  
+4) После первого «оно работает» — вернуться и решить:
+   - какие режимы результата тебе реально нужны,  
+   - нужен ли отдельный файл с правилами (CLAUDE_PROMPT.md / MCP),  
+   - насколько хочется походить на 99 по UI (float, шаблоны, AGENT‑style правила).  
+
+Если хочешь, в следующем шаге могу:  
+- набросать конкретные сигнатуры модулей `core.lua` и `cli.lua`,  
+- придумать текст первого системного промта, заточенного под «оптимизатор промтов для Claude Code CLI».
 
 ## Другие плагины для исследования 
 
@@ -116,5 +289,3 @@ botglue.nvim/
 - [3ZsForInsomnia/token-count.nvim](https://github.com/3ZsForInsomnia/token-count.nvim) - Shows the token count for the current buffer, with integrations for Lualine and NeoTree.
 - [nishu-murmu/cursor-inline](https://github.com/nishu-murmu/cursor-inline) - Cursor-style inline AI editing. Select code, describe the change, and get an inline, highlighted edit you can accept or reject—similar to Cursor inline workflow.
 - [codex.nvim](https://github.com/ishiooon/codex.nvim) - Codex IDE integration inside Neovim (no API key required).
-
-
