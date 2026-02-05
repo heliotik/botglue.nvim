@@ -1,120 +1,54 @@
-# Neovim-плагин для оптимизации промтов через Claude Code CLI
+# botglue.nvim
 
-## Описание проекта
+Neovim-плагин для обработки текста через Claude Code CLI. Выделяешь текст → вводишь инструкцию → получаешь результат.
 
-**botglue.nvim** — плагин для Neovim, который позволяет улучшать промты и исследовать код с помощью Claude Code CLI. Работает в режиме "one-shot": выделяешь текст → вводишь промт → получаешь результат.
+## Требования
 
-## Ключевые требования
+- Neovim 0.7+
+- [Claude Code CLI](https://claude.ai/code) установлен и доступен в PATH
 
-### Функциональность
-- **One-shot режим**: плагин принимает выделенный текст, отправляет его в Claude Code CLI с заданным системным промтом, возвращает результат
-- **Интеграция с Claude Code**: использует `claude` CLI для обработки текста (не API, именно CLI-инструмент)
-- **Визуальный режим**: работа с выделенным текстом в Neovim (visual mode selection)
+## Установка
 
-### Архитектура (по образцу ThePrimeagen/99)
-- Референсный проект: https://github.com/ThePrimeagen/99
-- Локальный форк для изучения: `/home/heliotik/project/heliotik/300`
-- Перенять паттерны: структуру плагина, способ вызова внешних CLI, обработку выделения, окно ввода промта
+### lazy.nvim
 
-### Техническая реализация
-- Язык: Lua (стандарт для Neovim-плагинов)
-- Точка входа: `prompt-optimizer.lua`
-- Использовать Neovim API (`vim.*`) для работы с буферами, выделением, командами
-
-## Текущее состояние
-
-- Начальная реализация: `botglue.nvim/prompt-optimizer.lua`
-- Конфигурация MCP: `prompt-optimizer-mcp.json`
-
-## Структура проекта
-
-```
-botglue.nvim/
-├── prompt-optimizer.lua    # основной модуль плагина
-├── prompt-optimizer-mcp.json
-└── README.md
+```lua
+{
+  "heliotik/botglue.nvim",
+  config = function()
+    require("prompt-optimizer").config()
+  end,
+}
 ```
 
-## Вдохновение
+## Использование
 
-- [ThePrimeagen/99](https://github.com/ThePrimeagen/99) — паттерны интеграции CLI с Neovim
-- шаблон для создания плагина https://github.com/ellisonleao/nvim-plugin-templatek
+Все команды работают в визуальном режиме (visual mode):
 
-## Описание плагина ThePrimeagen/99
+| Клавиша | Команда | Результат |
+|---------|---------|-----------|
+| `<leader>po` | Оптимизация промта | Заменяет выделение |
+| `<leader>pe` | Объяснение кода | Показывает в окне |
+| `<leader>pr` | Рефакторинг кода | Заменяет выделение |
+| `<leader>pt` | Перевод текста | Заменяет выделение |
 
-Плагин 99 — это AI‑агент внутри Neovim, который работает поверх OpenCode и ограничен текущим проектом/буфером, а не «всем компьютером». [byteiota](https://byteiota.com/theprimeagens-99-hits-542-stars-day-ai-for-skilled-devs/)
+### Процесс работы
 
-## Общая идея взаимодействия
+1. Выдели текст в визуальном режиме (`v`, `V`, или `<C-v>`)
+2. Нажми нужную комбинацию клавиш
+3. В появившемся окне введи дополнительные инструкции (опционально)
+4. Нажми `Enter` для отправки или `q`/`Esc` для отмены
+5. Результат либо заменит выделенный текст, либо откроется в отдельном окне
 
-Пользователь остаётся в своём обычном Vim‑флоу (LSP, treesitter, свои keymaps) и время от времени «врезает» AI туда, где нужно: дополнить функцию, переписать выделенный блок, помочь с конкретным файлом. [dev](https://dev.to/pacheco/the-developer-identity-crisis-ap2)
-Философия: AI — это инструмент для **точечных** операций (заполнение, правка, объяснение конкретного куска), а не автономный агент, который бродит по проекту сам. [x](https://x.com/ThePrimeagen/status/2006382336527520236)
+### Управление в окне ввода
 
-## Шаги установки и подготовки
+- `Enter` — отправить
+- `Shift+Enter` — новая строка
+- `q` или `Esc` — отмена
 
-- Пользователь ставит OpenCode и настраивает провайдера моделей (Claude, OpenAI и т.п.) — именно он выполняет все AI‑запросы. [github](https://github.com/ThePrimeagen/99/blob/master/README.md)
-- Устанавливает 99 как Lua‑плагин (через lazy.nvim или другой менеджер), подключая его к уже существующей экосистеме: treesitter, LSP. [trendshift](https://trendshift.io/repositories/19461)
-- В корне проекта (или в отдельных папках) создаёт AGENT.md, где описывает правила, стиль кода, доменную специфику — это «личность» и правила агента для этого репо. [github](https://github.com/ThePrimeagen/99/blob/master/AGENTS.md)
+## Философия
 
-## Базовые сценарии в редакторе
+AI как инструмент для точечных операций, а не автономный агент. Вдохновлено [ThePrimeagen/99](https://github.com/ThePrimeagen/99).
 
-Типичный UX выглядит так:
+## Лицензия
 
-- Пользователь редактирует код, как обычно, и доходит до места, где нужно реализовать функцию или кусок логики.  
-- Вызывает команду 99 (через :команду или keymap), находясь курсором внутри функции‑заглушки — плагин формирует промпт из текущего буфера, окружающего кода и AGENT.md, отправляет в OpenCode, и возвращает уже заполненную/переписанную функцию. [byteiota](https://byteiota.com/theprimeagens-99-hits-542-stars-day-ai-for-skilled-devs/)
-- Если нужно изменить существующий код, пользователь выделяет визуальный блок и снова вызывает соответствующую команду 99 — агент получает только этот фрагмент плюс ограниченный контекст, предлагает правку, которую плагин применяет как патч. [reddit](https://www.reddit.com/r/theprimeagen/comments/1qs403e/didnt_get_the_idea_behind_99_prompt_plugin/)
-
-Это ощущается как «inline‑редактирование» в стиле Cursor, но в Neovim и без постоянных автоподсказок. [reddit](https://www.reddit.com/r/theprimeagen/comments/1qs403e/didnt_get_the_idea_behind_99_prompt_plugin/)
-
-## Работа с правилами и «скиллами»
-
-- Через AGENT.md пользователь задаёт проектные правила: стиль, архитектурные ограничения, запрещённые решения, важные инварианты. [github](https://github.com/ThePrimeagen/99/blob/master/AGENTS.md)
-- Внутри промпт‑бокса (UI 99) используются специальные конструкции (например, префиксы вида @), которыми пользователь подключает заранее описанные «skills» / поведения, влияющие на то, как агент решает задачу. [byteiota](https://byteiota.com/theprimeagens-99-hits-542-stars-day-ai-for-skilled-devs/)
-- Это даёт эффект «шаблонных действий»: можно быстро включать, например, режим «пиши только тесты», «делай рефакторинг без изменения публичного API» и т.п., не расписывая каждый раз полный промпт. [byteiota](https://byteiota.com/theprimeagens-99-hits-542-stars-day-ai-for-skilled-devs/)
-
-## Как это ощущается в повседневной работе
-
-- Пользователь почти не меняет привычные привычки: двигается по коду, использует LSP‑goto, diagnostics, а 99 включается по горячей клавише там, где надо ускориться. [dev](https://dev.to/pacheco/the-developer-identity-crisis-ap2)
-- В отличие от «виб‑кодинга» с большими агентами, пользователь сам решает, какой кусок кода отдавать модели и когда остановиться; 99 не лезет в другие файлы, пока его явно не попросили. [x](https://x.com/ThePrimeagen/status/2006382336527520236)
-- За счёт AGENT.md и skills команда разработки может стандартизировать поведение AI: разные люди вызывают 99, но получают решения в одном стиле и в рамках общих правил проекта. [github](https://github.com/ThePrimeagen/99/blob/master/AGENTS.md)
-
-
-## Другие плагины для исследования 
-
-- [carlos-algms/agentic.nvim](https://github.com/carlos-algms/agentic.nvim) - Chat interface for AI ACP providers such as Claude, Gemini, Codex, OpenCode and Cursor.
-- [blob42/codegpt-ng.nvim](https://github.com/blob42/codegpt-ng.nvim) - Minimalist command based AI coding with a powerful template system. Supports Ollama, OpenAI and more.
-- [Aaronik/GPTModels.nvim](https://github.com/Aaronik/GPTModels.nvim) - GPTModels - a stable, clean, multi model, window based LLM AI tool.
-- [Robitx/gp.nvim](https://github.com/Robitx/gp.nvim) - ChatGPT like sessions and instructable text/code operations in your favorite editor.
-- [jackMort/ChatGPT.nvim](https://github.com/jackMort/ChatGPT.nvim) - Effortless Natural Language Generation with OpenAI's ChatGPT API.
-- [CamdenClark/flyboy](https://github.com/CamdenClark/flyboy) - Simple interaction with ChatGPT in a Markdown buffer. Supports GPT-4 and Azure OpenAI.
-- [gsuuon/model.nvim](https://github.com/gsuuon/model.nvim) - Integrate LLMs via a prompt builder interface. Multi-providers including OpenAI (+ compatibles), `PaLM`, `Hugging Face`, and local engines like `llamacpp`.
-- [dense-analysis/neural](https://github.com/dense-analysis/neural) - Integrate LLMs for generating code, interacting with chat bots, and more.
-- [jpmcb/nvim-llama](https://github.com/jpmcb/nvim-llama) - LLM (LLaMA 2 and `llama.cpp`) wrappers.
-- [David-Kunz/gen.nvim](https://github.com/David-Kunz/gen.nvim) - Generate text using LLMs (via Ollama) with customizable prompts.
-- [kiddos/gemini.nvim](https://github.com/kiddos/gemini.nvim) - Bindings to Google Gemini API.
-- [olimorris/codecompanion.nvim](https://github.com/olimorris/codecompanion.nvim) - Copilot Chat like experience, complete with inline assistant. Supports Anthropic, Gemini, Ollama and OpenAI.
-- [you-n-g/simplegpt.nvim](https://github.com/you-n-g/simplegpt.nvim) - Provide a simple yet flexible way to construct and send questions to ChatGPT.
-- [Exafunction/windsurf.nvim](https://github.com/Exafunction/windsurf.nvim) - Free, ultrafast Copilot alternative. Supports LSP and Tree-sitter.
-- [GeorgesAlkhouri/nvim-aider](https://github.com/GeorgesAlkhouri/nvim-aider) - Seamlessly integrate Aider for an AI-assisted coding experience.
-- [CopilotC-Nvim/CopilotChat.nvim](https://github.com/CopilotC-Nvim/CopilotChat.nvim) - A chat interface for GitHub Copilot that allows you to directly ask and receive answers to coding-related questions.
-- [tzachar/cmp-ai](https://github.com/tzachar/cmp-ai) - This is a general purpose AI source for nvim-cmp, easily adapted to any REST API supporting remote code completion.
-- [milanglacier/minuet-ai.nvim](https://github.com/milanglacier/minuet-ai.nvim) - Minuet offers code completion from LLM providers including OpenAI (compatible), Gemini, Claude, Ollama, Deepseek and more providers, with support for nvim-cmp, blink.cmp and virtual-text frontend.
-- [yetone/avante.nvim](https://github.com/yetone/avante.nvim) - Chat with your code as if you are in Cursor AI IDE.
-- [Kurama622/llm.nvim](https://github.com/Kurama622/llm.nvim) - Free large language model (LLM) support, provides commands to interact with LLM.
-- [3v0k4/exit.nvim](https://github.com/3v0k4/exit.nvim) - Prompt LLMs (large language models) to write Vim commands.
-- [k2589/LLuMinate.nvim](https://github.com/k2589/lluminate.nvim) - Enrich context for LLM with LSP hover added to clipboard.
-- [milanglacier/yarepl.nvim#aider-extensions](https://github.com/milanglacier/yarepl.nvim/blob/main/extensions/README.md) - Integration with [aider-chat](https://aider.chat), a TUI AI coding assistant.
-- [Davidyz/VectorCode](https://github.com/davidyz/vectorcode) - Supercharge your LLM experience with repository-level RAG.
-- [dlants/magenta.nvim](https://github.com/dlants/magenta.nvim) - Leverage coding assistants for chat and code generation. Provides tools for the AI/LLM agent to explore and edit your code, like Aider, Cursor and Windsurf.
-- [Flemma-Dev/flemma.nvim](https://github.com/Flemma-Dev/flemma.nvim) - A first-class AI workspace.
-- [heilgar/nochat.nvim](https://github.com/heilgar/nochat.nvim) - Cursor-like effortless natural language generation with multiple AI providers including Ollama, Anthropic (Claude), and ChatGPT.
-- [julwrites/llm-nvim](https://github.com/julwrites/llm-nvim) - Comprehensive integration with the [LLM](https://github.com/simonw/llm) tool.
-- [azorng/goose.nvim](https://github.com/azorng/goose.nvim) - Seamless integration with [goose](https://block.github.io/goose) - work with a powerful AI agent without leaving your editor.
-- [mozanunal/sllm.nvim](https://github.com/mozanunal/sllm.nvim) - In-editor chat powered by Simon Willison's LLM CLI: stream replies in a Markdown buffer, manage rich context (files, URLs, selections, diagnostics, shell outputs), switch models interactively, and even see token-usage stats.
-- [chatvim/chatvim.nvim](https://github.com/chatvim/chatvim.nvim) - Chat with Markdown files using AI models from xAI, OpenAI and Anthropic.
-- [3ZsForInsomnia/code-companion-picker](https://github.com/3ZsForInsomnia/code-companion-picker) - Telescope and Snacks picker integrations for previewing CodeCompanion prompts.
-- [3ZsForInsomnia/vs-code-companion](https://github.com/3ZsForInsomnia/vs-code-companion) - Tool for importing VSCode's Markdown prompts into CodeCompanion.
-- [3ZsForInsomnia/token-count.nvim](https://github.com/3ZsForInsomnia/token-count.nvim) - Shows the token count for the current buffer, with integrations for Lualine and NeoTree.
-- [nishu-murmu/cursor-inline](https://github.com/nishu-murmu/cursor-inline) - Cursor-style inline AI editing. Select code, describe the change, and get an inline, highlighted edit you can accept or reject—similar to Cursor inline workflow.
-- [codex.nvim](https://github.com/ishiooon/codex.nvim) - Codex IDE integration inside Neovim (no API key required).
-
-
+MIT
