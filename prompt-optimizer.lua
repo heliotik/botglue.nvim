@@ -150,6 +150,44 @@ return {
       vim.cmd("startinsert")
     end
 
+    -- Floating window for displaying results (Explain operation)
+    local function show_result_window(text, title)
+      local ui = vim.api.nvim_list_uis()[1]
+      local width = math.floor(ui.width * 2 / 3)
+      local height = math.floor(ui.height / 3)
+      local row = math.floor((ui.height - height) / 2)
+      local col = math.floor((ui.width - width) / 2)
+
+      local buf = vim.api.nvim_create_buf(false, true)
+      local win = vim.api.nvim_open_win(buf, true, {
+        relative = "editor",
+        width = width,
+        height = height,
+        row = row,
+        col = col,
+        style = "minimal",
+        border = "rounded",
+        title = title or " botglue ",
+        title_pos = "center",
+      })
+
+      local lines = vim.split(text, "\n")
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+      vim.wo[win].wrap = true
+      vim.bo[buf].modifiable = false
+      vim.bo[buf].bufhidden = "wipe"
+
+      local function close_window()
+        if vim.api.nvim_win_is_valid(win) then
+          vim.api.nvim_win_close(win, true)
+        end
+      end
+
+      vim.keymap.set("n", "q", close_window, { buffer = buf, nowait = true })
+      vim.keymap.set("n", "<Esc>", close_window, { buffer = buf, nowait = true })
+    end
+
     -- Получение visual selection
     local function get_visual_selection()
       local start_pos = vim.fn.getpos("'<")
