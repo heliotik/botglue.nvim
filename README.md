@@ -1,13 +1,13 @@
 # botglue.nvim
 
-Neovim-плагин для обработки текста через Claude Code CLI. Выделяешь текст → вводишь инструкцию → получаешь результат.
+Neovim plugin for AI-assisted text processing via Claude Code CLI. Select text → enter instructions → get results.
 
-## Требования
+## Requirements
 
 - Neovim 0.7+
-- [Claude Code CLI](https://claude.ai/code) установлен и доступен в PATH
+- [Claude Code CLI](https://claude.ai/code) installed and available in PATH
 
-## Установка
+## Installation
 
 ### lazy.nvim
 
@@ -15,40 +15,73 @@ Neovim-плагин для обработки текста через Claude Cod
 {
   "heliotik/botglue.nvim",
   config = function()
-    require("prompt-optimizer").config()
+    require("botglue").setup()
   end,
 }
 ```
 
-## Использование
+### packer.nvim
 
-Все команды работают в визуальном режиме (visual mode):
+```lua
+use {
+  "heliotik/botglue.nvim",
+  config = function()
+    require("botglue").setup()
+  end,
+}
+```
 
-| Клавиша | Команда | Результат |
-|---------|---------|-----------|
-| `<leader>po` | Оптимизация промта | Заменяет выделение |
-| `<leader>pe` | Объяснение кода | Показывает в окне |
-| `<leader>pr` | Рефакторинг кода | Заменяет выделение |
-| `<leader>pt` | Перевод текста | Заменяет выделение |
+## Configuration
 
-### Процесс работы
+```lua
+require("botglue").setup({
+  model = "opus",           -- Claude model to use
+  default_keymaps = true,   -- Set to false to disable default keymaps
+})
+```
 
-1. Выдели текст в визуальном режиме (`v`, `V`, или `<C-v>`)
-2. Нажми нужную комбинацию клавиш
-3. В появившемся окне введи дополнительные инструкции (опционально)
-4. Нажми `Enter` для отправки или `q`/`Esc` для отмены
-5. Результат либо заменит выделенный текст, либо откроется в отдельном окне
+## Usage
 
-### Управление в окне ввода
+All commands work in visual mode:
 
-- `Enter` — отправить
-- `Shift+Enter` — новая строка
-- `q` или `Esc` — отмена
+| Keymap | Command | Result |
+|--------|---------|--------|
+| `<leader>po` | `:BotglueOptimize` | Replaces selection |
+| `<leader>pe` | `:BotglueExplain` | Shows in window |
+| `<leader>pr` | `:BotglueRefactor` | Replaces selection |
+| `<leader>pt` | `:BotglueTranslate` | Replaces selection |
 
-## Философия
+### Workflow
 
-AI как инструмент для точечных операций, а не автономный агент. Вдохновлено [ThePrimeagen/99](https://github.com/ThePrimeagen/99).
+1. Select text in visual mode (`v`, `V`, or `<C-v>`)
+2. Press the keymap or run the command
+3. Enter additional instructions in the popup (optional)
+4. Press `Enter` to submit or `q`/`Esc` to cancel
+5. Result either replaces selection or opens in a window
 
-## Лицензия
+### Input Window Controls
+
+- `Enter` — submit
+- `Shift+Enter` — new line
+- `q` or `Esc` — cancel
+
+## Custom Keymaps
+
+If you disable default keymaps, set your own:
+
+```lua
+require("botglue").setup({ default_keymaps = false })
+
+vim.keymap.set("x", "<leader>bo", require("botglue").optimize, { desc = "Optimize prompt" })
+vim.keymap.set("x", "<leader>be", require("botglue").explain, { desc = "Explain code" })
+vim.keymap.set("x", "<leader>br", require("botglue").refactor, { desc = "Refactor code" })
+vim.keymap.set("x", "<leader>bt", require("botglue").translate, { desc = "Translate text" })
+```
+
+## Philosophy
+
+AI as a tool for precise operations, not an autonomous agent. Inspired by [ThePrimeagen/99](https://github.com/ThePrimeagen/99).
+
+## License
 
 MIT
