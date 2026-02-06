@@ -1,11 +1,12 @@
 # botglue.nvim
 
-Neovim plugin for AI-assisted text processing via Claude Code CLI. Select text → enter instructions → get results.
+Neovim plugin for AI-assisted inline code editing via Claude Code CLI. Select text, describe what you want, get results — all without leaving your code flow.
 
 ## Requirements
 
-- Neovim 0.7+
+- Neovim 0.10+
 - [Claude Code CLI](https://claude.ai/code) installed and available in PATH
+- [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim)
 
 ## Installation
 
@@ -14,6 +15,7 @@ Neovim plugin for AI-assisted text processing via Claude Code CLI. Select text �
 ```lua
 {
   "heliotik/botglue.nvim",
+  dependencies = { "nvim-telescope/telescope.nvim" },
   config = function()
     require("botglue").setup()
   end,
@@ -25,6 +27,7 @@ Neovim plugin for AI-assisted text processing via Claude Code CLI. Select text �
 ```lua
 use {
   "heliotik/botglue.nvim",
+  requires = { "nvim-telescope/telescope.nvim" },
   config = function()
     require("botglue").setup()
   end,
@@ -35,52 +38,59 @@ use {
 
 ```lua
 require("botglue").setup({
-  model = "opus",           -- Claude model to use
-  default_keymaps = true,   -- Set to false to disable default keymaps
+  model = "opus",                        -- default model
+  models = { "opus", "sonnet", "haiku" }, -- available for cycling
+  default_keymaps = true,               -- register <leader>pp and <leader>ps
+  timeout = 300,                         -- seconds (5 min), auto-cancel
+  max_turns = 3,                         -- Claude tool-use turns limit
+  ai_stdout_rows = 5,                   -- lines of Claude activity in top extmark
 })
 ```
 
 ## Usage
 
-All commands work in visual mode:
+### Keymaps (visual mode)
 
-| Keymap | Command | Result |
+| Keymap | Command | Action |
 |--------|---------|--------|
-| `<leader>po` | `:BotglueOptimize` | Replaces selection |
-| `<leader>pe` | `:BotglueExplain` | Shows in window |
-| `<leader>pr` | `:BotglueRefactor` | Replaces selection |
-| `<leader>pt` | `:BotglueTranslate` | Replaces selection |
+| `<leader>pp` | `:Botglue` | Main flow: picker → input → execute |
+| `<leader>ps` | `:BotglueCancel` | Cancel running request |
 
 ### Workflow
 
-1. Select text in visual mode (`v`, `V`, or `<C-v>`)
-2. Press the keymap or run the command
-3. Enter additional instructions in the popup (optional)
-4. Press `Enter` to submit or `q`/`Esc` to cancel
-5. Result either replaces selection or opens in a window
+1. Select code in visual mode (`v`, `V`, or `<C-v>`)
+2. Press `<leader>pp`
+3. Telescope picker opens with prompt history (sorted by frequency)
+4. Pick an existing prompt or type a new one, press `<CR>`
+5. Input window opens with model badge — edit prompt if needed
+6. `<CR>` submits, inline progress extmarks appear around selection
+7. Result replaces the selection
 
 ### Input Window Controls
 
-- `Enter` — submit
-- `Shift+Enter` — new line
-- `q` or `Esc` — cancel
+- `<CR>` — submit
+- `<S-CR>` — new line (multi-line prompt)
+- `<C-s>` — cycle model (opus → sonnet → haiku)
+- `q` / `<Esc>` — cancel
+
+### Inline Progress Display
+
+While processing, extmarks appear above and below your selection showing a spinner and Claude's activity (tool calls). The selection remains untouched until the result arrives.
 
 ## Custom Keymaps
 
-If you disable default keymaps, set your own:
+If you disable default keymaps:
 
 ```lua
 require("botglue").setup({ default_keymaps = false })
 
-vim.keymap.set("x", "<leader>bo", require("botglue").optimize, { desc = "Optimize prompt" })
-vim.keymap.set("x", "<leader>be", require("botglue").explain, { desc = "Explain code" })
-vim.keymap.set("x", "<leader>br", require("botglue").refactor, { desc = "Refactor code" })
-vim.keymap.set("x", "<leader>bt", require("botglue").translate, { desc = "Translate text" })
+vim.keymap.set("x", "<leader>pp", require("botglue").run, { desc = "Botglue: run" })
+vim.keymap.set("x", "<leader>ps", require("botglue").cancel, { desc = "Botglue: cancel" })
 ```
 
 ## Philosophy
 
-AI as a tool for precise operations, not an autonomous agent. Inspired by [ThePrimeagen/99](https://github.com/ThePrimeagen/99).
+AI as a tool for precise inline editing, not an autonomous agent. Inspired by [ThePrimeagen/99](https://github.com/ThePrimeagen/99).
 
 ## License
 
