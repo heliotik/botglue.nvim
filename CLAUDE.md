@@ -15,6 +15,8 @@ make test       # Run tests with plenary
 make pr-ready   # Run all checks (lint + test + format check)
 ```
 
+**Note:** `luacheck` may not be installed locally. Use `make test && make fmt-check` as a fallback for CI-equivalent checks.
+
 ## Architecture
 
 Modular structure in `lua/botglue/`:
@@ -81,6 +83,13 @@ nvim --headless -u test/minimal_init.lua -c "PlenaryBustedFile test/botglue/conf
 - Buffer setup: `nvim_create_buf` + `nvim_buf_set_lines`, cleanup in `after_each`
 - Mocking: inject stubs into `package.loaded` before requiring the module under test
 - `vim.notify` stubbing: replace with capture table in `before_each`, restore in `after_each`
+
+### Gotchas
+
+- `vim.fn.getpos("'<")` reads marks from **current buffer only** — `get_visual_selection(bufnr)` requires bufnr to be current
+- Mocking: must clear ALL modules in the dependency chain from `package.loaded`, not just the target
+- `nvim_list_uis()` returns empty in headless tests — UI code (floating windows) cannot be tested directly
+- `nvim_buf_set_mark` col is 0-indexed, `getpos` returns 1-indexed columns — off-by-one source
 
 ## Code Style
 
