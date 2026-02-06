@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-botglue.nvim is a Neovim plugin for AI-assisted text processing via Claude Code CLI. Users select text in visual mode, invoke a command, optionally provide instructions in a floating input window, and receive processed results.
+botglue.nvim is a Neovim plugin for AI-assisted inline code editing via Claude Code CLI. Users select text in visual mode, pick or type a prompt via Telescope, and the AI replaces the selection with the result. Progress is shown inline via extmarks.
 
 ## Development Commands
 
@@ -19,19 +19,40 @@ make pr-ready   # Run all checks (lint + test + format check)
 
 Modular structure in `lua/botglue/`:
 
-- `init.lua` — Entry point, `setup()`, public API
-- `config.lua` — Configuration defaults and merge logic
-- `operations.lua` — Visual selection handling, `run()` orchestration
-- `ui.lua` — Floating windows (input, result), spinner
-- `claude.lua` — CLI invocation, prompt templates
+- `init.lua` — Entry point, `setup()`, `M.run()`, `M.cancel()`, keymap registration
+- `config.lua` — Configuration defaults (models, timeout, max_turns, ai_stdout_rows)
+- `operations.lua` — Visual selection handling, `run(prompt, model)` orchestration
+- `claude.lua` — CLI command builder, process management, stream-json parser, cancel, timeout
+- `ui.lua` — Input window with model badge and `<C-s>` cycling
+- `display.lua` — Mark and RequestStatus classes for extmark-based inline progress
+- `history.lua` — JSON persistence for prompt history with frequency sorting
+- `picker.lua` — Telescope integration for prompt selection
+
+### Dependencies
+
+- **Required:** `telescope.nvim`
+- **Required:** Claude Code CLI (`claude`) in PATH
 
 ### Data Flow
 
 ```
-Visual selection → operations.run() → ui.capture_input()
-    → claude.build_prompt() → claude.call() async
-    → Result: operations.replace_selection() OR ui.show_result_window()
+<leader>pp (visual mode)
+  → picker.open() — Telescope with history sorted by frequency
+  → ui.capture_input() — input window, model badge, <C-s> cycling
+  → history.add(prompt, model)
+  → operations.run(prompt, model)
+    → get_visual_selection()
+    → display: place top_mark + bottom_mark extmarks
+    → claude.start() — spawn process, stream-json parsing
+      → tool-use events → display: push to top_mark lines
+      → text_delta events → collect into result
+    → on complete: display.clear(), replace_selection(result)
 ```
+
+### Commands
+
+- `:Botglue` — Main flow: picker → input → execute (visual mode)
+- `:BotglueCancel` — Cancel running request
 
 ## Testing
 
