@@ -2,6 +2,21 @@ local config = require("botglue.config")
 
 local M = {}
 
+--- Cycle to next model in list. Pure function for testability.
+--- @param current string current model name
+--- @param models string[] ordered list of model names
+--- @return string next model
+function M._next_model(current, models)
+  local idx = 1
+  for i, m in ipairs(models) do
+    if m == current then
+      idx = i
+      break
+    end
+  end
+  return models[(idx % #models) + 1]
+end
+
 --- Open input window with model badge and cycling.
 --- @param opts {prompt: string|nil, model: string|nil}
 --- @param on_submit fun(prompt: string, model: string)
@@ -77,15 +92,7 @@ function M.capture_input(opts, on_submit, on_cancel)
   end
 
   local function cycle_model()
-    local idx = 1
-    for i, m in ipairs(models) do
-      if m == current_model then
-        idx = i
-        break
-      end
-    end
-    idx = (idx % #models) + 1
-    current_model = models[idx]
+    current_model = M._next_model(current_model, models)
     vim.api.nvim_win_set_config(win, {
       footer = make_footer(),
       footer_pos = "right",
