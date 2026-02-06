@@ -4,7 +4,14 @@ local config = require("botglue.config")
 
 local M = {}
 
-function M.get_visual_selection()
+--- Get visual selection from the specified buffer.
+--- Must be called while the original buffer is still current,
+--- before opening any UI (picker, input window).
+--- @param bufnr number|nil buffer number (defaults to current buffer)
+--- @return table|nil selection data
+function M.get_visual_selection(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
   local start_pos = vim.fn.getpos("'<")
   local end_pos = vim.fn.getpos("'>")
 
@@ -21,20 +28,20 @@ function M.get_visual_selection()
 
   if is_linewise then
     start_col = 0
-    local end_line_content = vim.api.nvim_buf_get_lines(0, end_line - 1, end_line, false)[1]
+    local end_line_content = vim.api.nvim_buf_get_lines(bufnr, end_line - 1, end_line, false)[1]
     end_col = end_line_content and #end_line_content or 0
   else
     start_col = start_pos[3] - 1
     end_col = end_pos[3]
 
-    local end_line_content = vim.api.nvim_buf_get_lines(0, end_line - 1, end_line, false)[1]
+    local end_line_content = vim.api.nvim_buf_get_lines(bufnr, end_line - 1, end_line, false)[1]
     if end_line_content then
       end_col = math.min(end_col, #end_line_content)
     end
   end
 
   local ok, lines =
-    pcall(vim.api.nvim_buf_get_text, 0, start_line - 1, start_col, end_line - 1, end_col, {})
+    pcall(vim.api.nvim_buf_get_text, bufnr, start_line - 1, start_col, end_line - 1, end_col, {})
 
   if not ok then
     return nil
@@ -42,7 +49,7 @@ function M.get_visual_selection()
 
   return {
     text = table.concat(lines, "\n"),
-    bufnr = vim.api.nvim_get_current_buf(),
+    bufnr = bufnr,
     start_line = start_line,
     start_col = start_col,
     end_line = end_line,
@@ -71,8 +78,8 @@ end
 --- Main entry point. Called after user submits prompt from input window.
 --- @param prompt string user's prompt text
 --- @param model string model to use
-function M.run(prompt, model)
-  local sel = M.get_visual_selection()
+--- @param sel table pre-captured visual selection
+function M.run(prompt, model, sel)
   if not sel or sel.text == "" then
     vim.notify("botglue: no text selected", vim.log.levels.WARN)
     return
@@ -105,13 +112,18 @@ function M.run(prompt, model)
   bottom_status:start()
 
   local ctx = {
-    filepath = vim.fn.expand("%:."),
+    filepath = vim.api.nvim_buf_get_name(bufnr),
     start_line = sel.start_line,
     end_line = sel.end_line,
-    filetype = vim.bo.filetype,
+    filetype = vim.bo[bufnr].filetype,
     project = vim.fn.fnamemodify(vim.fn.getcwd(), ":t"),
     model = model,
   }
+  -- Use relative path if possible
+  local cwd = vim.fn.getcwd() .. "/"
+  if ctx.filepath:sub(1, #cwd) == cwd then
+    ctx.filepath = ctx.filepath:sub(#cwd + 1)
+  end
 
   claude.start(prompt, ctx, {
     on_stdout = function(parsed)
@@ -122,16 +134,15 @@ function M.run(prompt, model)
         end
       end
     end,
+    -- on_complete is already called inside vim.schedule by claude.lua
     on_complete = function(err, result)
-      vim.schedule(function()
-        cleanup()
-        if err then
-          vim.notify("botglue: " .. err, vim.log.levels.ERROR)
-          return
-        end
-        M.replace_selection(sel, result)
-        vim.notify("botglue: done", vim.log.levels.INFO)
-      end)
+      cleanup()
+      if err then
+        vim.notify("botglue: " .. err, vim.log.levels.ERROR)
+        return
+      end
+      M.replace_selection(sel, result)
+      vim.notify("botglue: done", vim.log.levels.INFO)
     end,
   })
 end

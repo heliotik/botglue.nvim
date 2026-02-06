@@ -75,6 +75,61 @@ describe("botglue.claude", function()
     end)
   end)
 
+  describe("_extract_result", function()
+    it("returns nil for empty chunks", function()
+      assert.is_nil(claude._extract_result({}))
+    end)
+
+    it("extracts result from parsed.result field", function()
+      local chunks = {
+        vim.json.encode({ type = "other", data = "noise" }),
+        vim.json.encode({ result = "the answer" }),
+      }
+      assert.equals("the answer", claude._extract_result(chunks))
+    end)
+
+    it("accumulates text_delta events", function()
+      local chunks = {
+        vim.json.encode({
+          type = "stream_event",
+          event = { delta = { type = "text_delta", text = "hello " } },
+        }),
+        vim.json.encode({
+          type = "stream_event",
+          event = { delta = { type = "text_delta", text = "world" } },
+        }),
+      }
+      assert.equals("hello world", claude._extract_result(chunks))
+    end)
+
+    it("ignores invalid JSON chunks", function()
+      local chunks = {
+        "not json at all",
+        vim.json.encode({ result = "valid result" }),
+        "more garbage",
+      }
+      assert.equals("valid result", claude._extract_result(chunks))
+    end)
+
+    it("returns nil when no result found", function()
+      local chunks = {
+        vim.json.encode({ type = "other", data = "no result here" }),
+      }
+      assert.is_nil(claude._extract_result(chunks))
+    end)
+
+    it("prefers parsed.result over text_delta", function()
+      local chunks = {
+        vim.json.encode({
+          type = "stream_event",
+          event = { delta = { type = "text_delta", text = "partial" } },
+        }),
+        vim.json.encode({ result = "final result" }),
+      }
+      assert.equals("final result", claude._extract_result(chunks))
+    end)
+  end)
+
   describe("cancel", function()
     it("does not error when no active job", function()
       assert.has_no.errors(function()

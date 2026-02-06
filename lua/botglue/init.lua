@@ -21,12 +21,19 @@ function M.setup(opts)
 end
 
 function M.run()
+  -- Capture selection in original buffer before any UI changes context
+  local sel = operations.get_visual_selection()
+  if not sel or sel.text == "" then
+    vim.notify("botglue: no text selected", vim.log.levels.WARN)
+    return
+  end
+
   picker.open(function(entry)
     if not entry then
       -- Empty selection, open blank input
       ui.capture_input({}, function(prompt, model)
         history.add(prompt, model)
-        operations.run(prompt, model)
+        operations.run(prompt, model, sel)
       end)
       return
     end
@@ -36,7 +43,7 @@ function M.run()
       model = entry.model,
     }, function(prompt, model)
       history.add(prompt, model)
-      operations.run(prompt, model)
+      operations.run(prompt, model, sel)
     end)
   end)
 end

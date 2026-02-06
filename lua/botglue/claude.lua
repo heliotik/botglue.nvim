@@ -4,6 +4,7 @@ local M = {}
 
 M._active_job = nil
 M._timeout_timer = nil
+M._cancel_reason = nil
 
 --- Build the system prompt with file and selection context.
 --- @param ctx table {filepath, start_line, end_line, filetype, project}
@@ -62,7 +63,9 @@ function M.start(prompt, ctx, observer)
 
   local cmd = M.build_command(prompt, ctx)
   local stdout_chunks = {}
+  local partial = ""
 
+  M._cancel_reason = nil
   M._active_job = vim.fn.jobstart(cmd, {
     stdout_buffered = false,
     stderr_buffered = false,
@@ -70,7 +73,11 @@ function M.start(prompt, ctx, observer)
       if not data then
         return
       end
-      for _, line in ipairs(data) do
+      -- Handle partial lines: last element may be incomplete
+      data[1] = partial .. data[1]
+      partial = data[#data]
+      for i = 1, #data - 1 do
+        local line = data[i]
         if line ~= "" then
           table.insert(stdout_chunks, line)
           local ok, parsed = pcall(vim.json.decode, line)
@@ -86,6 +93,16 @@ function M.start(prompt, ctx, observer)
     on_exit = function(_, code)
       M._clear_timeout()
       M._active_job = nil
+
+      -- If cancelled (by user or timeout), use the cancel reason
+      local reason = M._cancel_reason
+      M._cancel_reason = nil
+      if reason then
+        vim.schedule(function()
+          observer.on_complete(reason, nil)
+        end)
+        return
+      end
 
       if code ~= 0 then
         vim.schedule(function()
@@ -141,17 +158,11 @@ function M._extract_result(chunks)
     return table.concat(result_parts, "")
   end
 
-  for i = #chunks, 1, -1 do
-    local ok, parsed = pcall(vim.json.decode, chunks[i])
-    if ok and parsed and parsed.result then
-      return parsed.result
-    end
-  end
-
   return nil
 end
 
 function M.cancel()
+  M._cancel_reason = M._cancel_reason or "cancelled"
   if M._active_job and M._active_job > 0 then
     vim.fn.jobstop(M._active_job)
     M._active_job = nil
@@ -168,8 +179,8 @@ function M._start_timeout(timeout_sec)
     0,
     vim.schedule_wrap(function()
       if M._active_job then
+        M._cancel_reason = "request timed out"
         M.cancel()
-        vim.notify("botglue: request timed out", vim.log.levels.WARN)
       end
     end)
   )
