@@ -84,9 +84,13 @@ describe("botglue.operations", function()
         end_line = 1,
         end_col = 5,
       }
+      -- Stub vim.notify to suppress expected error output
+      local orig_notify = vim.notify
+      vim.notify = function() end
       assert.has_no.errors(function()
         operations.replace_selection(sel, "nope")
       end)
+      vim.notify = orig_notify
     end)
   end)
 
@@ -144,18 +148,15 @@ describe("botglue.operations", function()
       assert.equals(3, sel.end_line)
     end)
 
-    it("uses explicit bufnr parameter", function()
-      -- bufnr is already the current buffer (set in before_each).
-      -- Set marks on it, then pass bufnr explicitly to verify
-      -- the returned selection references the correct buffer.
+    it("passes explicit bufnr through to returned selection", function()
+      -- getpos("'<") reads marks from current buffer, so bufnr must be current.
+      -- This test verifies the returned sel.bufnr matches what was passed in.
       vim.api.nvim_buf_set_mark(bufnr, "<", 1, 0, {})
       vim.api.nvim_buf_set_mark(bufnr, ">", 1, 7, {})
       local sel = operations.get_visual_selection(bufnr)
       assert.is_truthy(sel)
       assert.equals(bufnr, sel.bufnr)
       assert.equals("line one", sel.text)
-      assert.equals(1, sel.start_line)
-      assert.equals(1, sel.end_line)
     end)
   end)
 
@@ -163,6 +164,8 @@ describe("botglue.operations", function()
     local bufnr
     local mock_claude
     local mock_marks_deleted
+    local notifications
+    local original_notify
 
     before_each(function()
       -- Reset all modules for clean mock injection
@@ -173,6 +176,13 @@ describe("botglue.operations", function()
 
       local config = require("botglue.config")
       config.setup()
+
+      -- Stub vim.notify to capture notifications silently
+      notifications = {}
+      original_notify = vim.notify
+      vim.notify = function(msg, level)
+        table.insert(notifications, { msg = msg, level = level })
+      end
 
       -- Mock claude
       mock_claude = {
@@ -233,6 +243,7 @@ describe("botglue.operations", function()
     end)
 
     after_each(function()
+      vim.notify = original_notify
       pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
     end)
 
@@ -279,7 +290,7 @@ describe("botglue.operations", function()
       assert.equals("replaced text", lines[2])
     end)
 
-    it("does not replace selection on error", function()
+    it("notifies error and does not replace selection on failure", function()
       local sel = {
         text = "line two",
         bufnr = bufnr,
@@ -292,6 +303,10 @@ describe("botglue.operations", function()
       mock_claude._last_observer.on_complete("timeout", nil)
       local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
       assert.equals("line two", lines[2])
+      -- Verify error notification was shown
+      assert.equals(1, #notifications)
+      assert.matches("timeout", notifications[1].msg)
+      assert.equals(vim.log.levels.ERROR, notifications[1].level)
     end)
 
     it("cleans up marks on completion", function()
@@ -311,6 +326,7 @@ describe("botglue.operations", function()
 
   describe("cancel", function()
     local mock_claude
+    local original_notify
 
     before_each(function()
       package.loaded["botglue.operations"] = nil
@@ -320,6 +336,10 @@ describe("botglue.operations", function()
 
       local config = require("botglue.config")
       config.setup()
+
+      -- Stub vim.notify to suppress output
+      original_notify = vim.notify
+      vim.notify = function() end
 
       mock_claude = {
         start = function() end,
@@ -347,6 +367,10 @@ describe("botglue.operations", function()
       }
 
       operations = require("botglue.operations")
+    end)
+
+    after_each(function()
+      vim.notify = original_notify
     end)
 
     it("calls claude.cancel", function()
