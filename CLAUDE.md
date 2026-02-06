@@ -56,7 +56,16 @@ Modular structure in `lua/botglue/`:
 
 ## Testing
 
-Tests use plenary.nvim and are located in `test/botglue/`:
+60 tests using plenary.nvim, located in `test/botglue/`:
+
+| File | Tests | Covers |
+|------|-------|--------|
+| `config_spec.lua` | 9 | Defaults, setup merging, v0.2.0 fields |
+| `claude_spec.lua` | 11 | Command builder, system prompt, `_extract_result`, cancel |
+| `display_spec.lua` | 8 | Mark lifecycle, RequestStatus spinner/push/eviction |
+| `history_spec.lua` | 6 | Add, dedup, sort, disk persistence |
+| `operations_spec.lua` | 18 | `replace_selection`, `get_visual_selection`, `run()` with mocked claude, `cancel()` |
+| `ui_spec.lua` | 8 | `_next_model` cycling, `_resolve_input` submit/cancel logic |
 
 ```bash
 # Run all tests
@@ -65,6 +74,13 @@ make test
 # Run specific test file
 nvim --headless -u test/minimal_init.lua -c "PlenaryBustedFile test/botglue/config_spec.lua"
 ```
+
+### Test Patterns
+
+- Module reload in `before_each`: clear `package.loaded["botglue.X"]`, re-require
+- Buffer setup: `nvim_create_buf` + `nvim_buf_set_lines`, cleanup in `after_each`
+- Mocking: inject stubs into `package.loaded` before requiring the module under test
+- `vim.notify` stubbing: replace with capture table in `before_each`, restore in `after_each`
 
 ## Code Style
 
