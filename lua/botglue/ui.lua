@@ -17,6 +17,20 @@ function M._next_model(current, models)
   return models[(idx % #models) + 1]
 end
 
+--- Resolve input text into submit or cancel action. Pure function for testability.
+--- @param text string raw input text (may be multi-line)
+--- @param on_submit fun(prompt: string, model: string)
+--- @param on_cancel fun()|nil
+--- @param model string current model
+function M._resolve_input(text, on_submit, on_cancel, model)
+  local input = vim.trim(text)
+  if input ~= "" then
+    on_submit(input, model)
+  elseif on_cancel then
+    on_cancel()
+  end
+end
+
 --- Open input window with model badge and cycling.
 --- @param opts {prompt: string|nil, model: string|nil}
 --- @param on_submit fun(prompt: string, model: string)
@@ -73,13 +87,9 @@ function M.capture_input(opts, on_submit, on_cancel)
 
   local function submit()
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-    local input = vim.trim(table.concat(lines, "\n"))
+    local text = table.concat(lines, "\n")
     close_window()
-    if input ~= "" then
-      on_submit(input, current_model)
-    elseif on_cancel then
-      on_cancel()
-    end
+    M._resolve_input(text, on_submit, on_cancel, current_model)
   end
 
   local function newline()
