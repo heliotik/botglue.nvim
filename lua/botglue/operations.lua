@@ -1,12 +1,8 @@
-local ui = require("botglue.ui")
+local display = require("botglue.display")
 local claude = require("botglue.claude")
+local config = require("botglue.config")
 
 local M = {}
-
-M.ResultMode = {
-  REPLACE = "replace",
-  WINDOW = "window",
-}
 
 function M.get_visual_selection()
   local start_pos = vim.fn.getpos("'<")
@@ -68,54 +64,85 @@ function M.replace_selection(sel, new_text)
   )
 
   if not ok then
-    vim.notify("Failed to replace text: " .. tostring(err), vim.log.levels.ERROR)
+    vim.notify("botglue: failed to replace text: " .. tostring(err), vim.log.levels.ERROR)
   end
 end
 
-function M.get_context()
-  local cwd = vim.fn.getcwd()
-  return {
-    project = vim.fn.fnamemodify(cwd, ":t"),
-    file = vim.fn.expand("%:."),
-    filetype = vim.bo.filetype,
-  }
-end
-
-function M.run(opts)
+--- Main entry point. Called after user submits prompt from input window.
+--- @param prompt string user's prompt text
+--- @param model string model to use
+function M.run(prompt, model)
   local sel = M.get_visual_selection()
   if not sel or sel.text == "" then
-    vim.notify("Нет выделенного текста", vim.log.levels.WARN)
+    vim.notify("botglue: no text selected", vim.log.levels.WARN)
     return
   end
 
-  ui.capture_input(opts.input_title, function(user_input)
-    ui.start_spinner(opts.spinner_msg)
+  local bufnr = sel.bufnr
+  local top_mark = display.Mark.above(bufnr, sel.start_line)
+  local bottom_mark = display.Mark.at(bufnr, sel.end_line)
 
-    local context = M.get_context()
-    local prompt = claude.build_prompt(opts.operation, sel.text, user_input, context)
+  local top_status =
+    display.RequestStatus.new(250, config.options.ai_stdout_rows, "Processing", top_mark)
+  local bottom_status = display.RequestStatus.new(250, 1, "Processing", bottom_mark)
 
-    claude.call(prompt, function(err, result)
+  local cleaned_up = false
+  local function cleanup()
+    if cleaned_up then
+      return
+    end
+    cleaned_up = true
+    top_status:stop()
+    bottom_status:stop()
+    top_mark:delete()
+    bottom_mark:delete()
+  end
+
+  -- Store cleanup for external cancel
+  M._cleanup = cleanup
+
+  top_status:start()
+  bottom_status:start()
+
+  local ctx = {
+    filepath = vim.fn.expand("%:."),
+    start_line = sel.start_line,
+    end_line = sel.end_line,
+    filetype = vim.bo.filetype,
+    project = vim.fn.fnamemodify(vim.fn.getcwd(), ":t"),
+    model = model,
+  }
+
+  claude.start(prompt, ctx, {
+    on_stdout = function(parsed)
+      if parsed.type == "stream_event" and parsed.event then
+        local delta = parsed.event.delta
+        if delta and delta.type == "tool_use" then
+          top_status:push("Using " .. (delta.name or "tool") .. "...")
+        end
+      end
+    end,
+    on_complete = function(err, result)
       vim.schedule(function()
+        cleanup()
         if err then
-          ui.stop_spinner("✗ " .. err, vim.log.levels.ERROR)
+          vim.notify("botglue: " .. err, vim.log.levels.ERROR)
           return
         end
-
-        if not result or result == "" then
-          ui.stop_spinner("⚠ Пустой ответ от Claude", vim.log.levels.WARN)
-          return
-        end
-
-        if opts.result_mode == M.ResultMode.REPLACE then
-          M.replace_selection(sel, result)
-          ui.stop_spinner(opts.success_msg, vim.log.levels.INFO)
-        else
-          ui.stop_spinner(nil)
-          ui.show_result_window(result, opts.window_title)
-        end
+        M.replace_selection(sel, result)
+        vim.notify("botglue: done", vim.log.levels.INFO)
       end)
-    end)
-  end)
+    end,
+  })
+end
+
+function M.cancel()
+  claude.cancel()
+  if M._cleanup then
+    M._cleanup()
+    M._cleanup = nil
+  end
+  vim.notify("botglue: cancelled", vim.log.levels.WARN)
 end
 
 return M
