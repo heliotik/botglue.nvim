@@ -308,4 +308,67 @@ describe("botglue.operations", function()
       assert.equals(2, mock_marks_deleted)
     end)
   end)
+
+  describe("cancel", function()
+    local mock_claude
+
+    before_each(function()
+      package.loaded["botglue.operations"] = nil
+      package.loaded["botglue.config"] = nil
+      package.loaded["botglue.claude"] = nil
+      package.loaded["botglue.display"] = nil
+
+      local config = require("botglue.config")
+      config.setup()
+
+      mock_claude = {
+        start = function() end,
+        cancel = function()
+          mock_claude._cancelled = true
+        end,
+        _cancelled = false,
+      }
+      package.loaded["botglue.claude"] = mock_claude
+
+      package.loaded["botglue.display"] = {
+        Mark = {
+          above = function()
+            return { set_virtual_text = function() end, delete = function() end }
+          end,
+          at = function()
+            return { set_virtual_text = function() end, delete = function() end }
+          end,
+        },
+        RequestStatus = {
+          new = function()
+            return { start = function() end, stop = function() end, push = function() end }
+          end,
+        },
+      }
+
+      operations = require("botglue.operations")
+    end)
+
+    it("calls claude.cancel", function()
+      operations.cancel()
+      assert.is_true(mock_claude._cancelled)
+    end)
+
+    it("runs cleanup function when set", function()
+      local cleaned = false
+      operations._cleanup = function()
+        cleaned = true
+      end
+      operations.cancel()
+      assert.is_true(cleaned)
+      assert.is_nil(operations._cleanup)
+    end)
+
+    it("does not crash when no cleanup set", function()
+      operations._cleanup = nil
+      assert.has_no.errors(function()
+        operations.cancel()
+      end)
+    end)
+  end)
 end)
