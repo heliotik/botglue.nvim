@@ -34,4 +34,22 @@ describe("botglue.config", function()
       assert.is_false(config.options.default_keymaps)
     end)
   end)
+
+  describe("new v0.2.0 defaults", function()
+    it("has models list with opus first", function()
+      assert.same({ "opus", "sonnet", "haiku" }, config.defaults.models)
+    end)
+
+    it("has timeout set to 300", function()
+      assert.equals(300, config.defaults.timeout)
+    end)
+
+    it("has max_turns set to 3", function()
+      assert.equals(3, config.defaults.max_turns)
+    end)
+
+    it("has ai_stdout_rows set to 5", function()
+      assert.equals(5, config.defaults.ai_stdout_rows)
+    end)
+  end)
 end)

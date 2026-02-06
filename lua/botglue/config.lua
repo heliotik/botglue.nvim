@@ -2,7 +2,11 @@ local M = {}
 
 M.defaults = {
   model = "opus",
+  models = { "opus", "sonnet", "haiku" },
   default_keymaps = true,
+  timeout = 300,
+  max_turns = 3,
+  ai_stdout_rows = 5,
 }
 
 M.options = {}
