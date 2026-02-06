@@ -15,8 +15,6 @@ make test       # Run tests with plenary
 make pr-ready   # Run all checks (lint + test + format check)
 ```
 
-**Note:** `luacheck` may not be installed locally. Use `make test && make fmt-check` as a fallback for CI-equivalent checks.
-
 ## Architecture
 
 Modular structure in `lua/botglue/`:
