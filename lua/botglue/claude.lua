@@ -2,10 +2,6 @@ local config = require("botglue.config")
 
 local M = {}
 
-M._active_job = nil
-M._timeout_timer = nil
-M._cancel_reason = nil
-
 --- Build the system prompt with file and selection context.
 --- @param ctx table {filepath, start_line, end_line, filetype, project}
 --- @return string
@@ -158,39 +154,6 @@ function M._extract_result(chunks)
   end
 
   return nil
-end
-
-function M.cancel()
-  M._cancel_reason = M._cancel_reason or "cancelled"
-  if M._active_job and M._active_job > 0 then
-    vim.fn.jobstop(M._active_job)
-    M._active_job = nil
-  end
-  M._clear_timeout()
-end
-
---- @param timeout_sec number
-function M._start_timeout(timeout_sec)
-  M._clear_timeout()
-  M._timeout_timer = vim.uv.new_timer()
-  M._timeout_timer:start(
-    timeout_sec * 1000,
-    0,
-    vim.schedule_wrap(function()
-      if M._active_job then
-        M._cancel_reason = "request timed out"
-        M.cancel()
-      end
-    end)
-  )
-end
-
-function M._clear_timeout()
-  if M._timeout_timer then
-    M._timeout_timer:stop()
-    M._timeout_timer:close()
-    M._timeout_timer = nil
-  end
 end
 
 return M
