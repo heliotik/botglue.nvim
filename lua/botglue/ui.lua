@@ -41,6 +41,8 @@ function M.create_prompt_window(opts)
   local current_model = opts.model or config.options.model
   local models = config.options.models
   local enter = opts.enter ~= false
+  local no_border = opts.no_border or false
+  local no_footer = opts.no_footer or false
 
   local height = 5
 
@@ -50,24 +52,40 @@ function M.create_prompt_window(opts)
 
   local buf = vim.api.nvim_create_buf(false, true)
 
-  local win = vim.api.nvim_open_win(buf, enter, {
+  local win_opts = {
     relative = "editor",
     width = opts.width,
     height = height,
     row = opts.row,
     col = opts.col,
     style = "minimal",
-    border = "rounded",
-    title = " prompt ",
-    title_pos = "left",
-    footer = make_footer(),
-    footer_pos = "right",
-  })
+  }
+  if no_border then
+    win_opts.border = "none"
+  else
+    win_opts.border = "rounded"
+    win_opts.title = " prompt "
+    win_opts.title_pos = "left"
+  end
+  if not no_border and not no_footer then
+    win_opts.footer = make_footer()
+    win_opts.footer_pos = "right"
+  end
+  if opts.zindex then
+    win_opts.zindex = opts.zindex
+  end
+
+  local win = vim.api.nvim_open_win(buf, enter, win_opts)
 
   vim.bo[buf].bufhidden = "wipe"
   vim.wo[win].wrap = true
   vim.wo[win].number = true
   vim.wo[win].relativenumber = true
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].completefunc = ""
+  vim.bo[buf].omnifunc = ""
+  vim.bo[buf].complete = ""
+  vim.b[buf].cmp = false
 
   local handle = {}
   handle.buf = buf
@@ -137,7 +155,7 @@ function M.create_prompt_window(opts)
   --- @param model string
   function handle.set_model(model)
     current_model = model
-    if handle.is_valid() then
+    if not no_footer and handle.is_valid() then
       vim.api.nvim_win_set_config(win, {
         footer = make_footer(),
         footer_pos = "right",
@@ -148,7 +166,7 @@ function M.create_prompt_window(opts)
   --- Cycle to the next model and update the footer.
   function handle.cycle_model()
     current_model = M._next_model(current_model, models)
-    if handle.is_valid() then
+    if not no_footer and handle.is_valid() then
       vim.api.nvim_win_set_config(win, {
         footer = make_footer(),
         footer_pos = "right",
