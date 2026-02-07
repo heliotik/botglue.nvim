@@ -319,6 +319,47 @@ describe("botglue.operations", function()
       mock_claude._last_observer.on_complete(nil, "done")
       assert.equals(2, mock_marks_deleted)
     end)
+
+    it("allows two parallel requests on different selections", function()
+      local observers = {}
+      local call_count = 0
+      mock_claude.start = function(prompt, ctx, observer)
+        call_count = call_count + 1
+        table.insert(observers, { prompt = prompt, observer = observer })
+        return { job_id = call_count }
+      end
+
+      local sel1 = {
+        text = "line one",
+        bufnr = bufnr,
+        start_line = 1,
+        start_col = 0,
+        end_line = 1,
+        end_col = 8,
+      }
+      local sel2 = {
+        text = "line three",
+        bufnr = bufnr,
+        start_line = 3,
+        start_col = 0,
+        end_line = 3,
+        end_col = 10,
+      }
+
+      operations.run("prompt A", "opus", sel1)
+      operations.run("prompt B", "sonnet", sel2)
+
+      assert.equals(2, call_count)
+
+      -- Complete second request first (out of order)
+      observers[2].observer.on_complete(nil, "new three")
+      observers[1].observer.on_complete(nil, "new one")
+
+      local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+      assert.equals("new one", lines[1])
+      assert.equals("line two", lines[2])
+      assert.equals("new three", lines[3])
+    end)
   end)
 
 end)
