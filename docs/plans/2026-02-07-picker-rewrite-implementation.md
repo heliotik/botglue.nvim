@@ -1,3 +1,25 @@
+# Picker Rewrite Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** Replace Telescope-based picker with three custom float windows (filter + list + prompt) for full control over focus, keymaps, and borders.
+
+**Architecture:** Three custom float windows owned by `picker.lua`. Panel 1 (filter) is a 1-line input buffer. Panel 2 (list) is a read-only buffer with `cursorline=true`. Panel 3 (prompt) uses the existing `ui.create_prompt_window` factory. Focus management, draft/preview state, and lifecycle are all in `picker.lua` closures. Telescope dependency removed entirely.
+
+**Tech Stack:** Lua, Neovim API (`nvim_open_win`, `nvim_create_buf`, `nvim_create_autocmd`), `vim.fn.matchfuzzy` for filtering
+
+**Design document:** `docs/plans/2026-02-07-picker-rewrite-design.md`
+
+---
+
+## Task 1: Rewrite picker.lua
+
+**Files:**
+- Modify: `lua/botglue/picker.lua`
+
+**Step 1: Replace the entire file with:**
+
+```lua
 local history = require("botglue.history")
 local config = require("botglue.config")
 local ui = require("botglue.ui")
@@ -399,3 +421,147 @@ function M.open(on_submit)
 end
 
 return M
+```
+
+**Step 2: Run format + lint**
+
+Run: `make fmt && make lint`
+Expected: No errors
+
+---
+
+## Task 2: Update README.md — Remove Telescope Dependency
+
+**Files:**
+- Modify: `README.md`
+
+**Step 1: Update requirements section**
+
+Remove the telescope.nvim line from Requirements:
+```markdown
+## Requirements
+
+- Neovim 0.10+
+- [Claude Code CLI](https://claude.ai/code) installed and available in PATH
+```
+
+**Step 2: Update lazy.nvim installation**
+
+Remove `dependencies`:
+```lua
+{
+  "heliotik/botglue.nvim",
+  config = function()
+    require("botglue").setup()
+  end,
+}
+```
+
+**Step 3: Update packer.nvim installation**
+
+Remove `requires`:
+```lua
+use {
+  "heliotik/botglue.nvim",
+  config = function()
+    require("botglue").setup()
+  end,
+}
+```
+
+**Step 4: Update Controls section**
+
+Replace the Controls section with updated keymaps:
+
+```markdown
+### Controls
+
+**History list (Panel 2):**
+- `j`/`k` — navigate, preview shown in prompt editor
+- `Enter` — select and move to prompt editor
+- `Ctrl+S` — quick submit without editing
+- `/` — open filter
+- `Tab` — move to prompt editor
+- `Esc`/`q` — close
+
+**Filter (Panel 1):**
+- Type — fuzzy filter history list
+- `Ctrl+J`/`Ctrl+K` — navigate list without leaving filter
+- `Enter` — select top match, move to prompt editor
+- `Esc` — clear filter, return to list
+- `Tab` — move to prompt editor
+
+**Prompt editor (Panel 3):**
+- `Enter` — new line (insert mode) / submit (normal mode)
+- `Ctrl+S` — submit prompt (any mode)
+- `Shift+Tab` — cycle model (opus → sonnet → haiku)
+- `Tab` — return to history list
+- `q` / `Esc` — close (normal mode)
+```
+
+**Step 5: Update Workflow step 4-6**
+
+```markdown
+4. Browse history with `j`/`k`, press `/` to filter, or `Tab` to prompt editor
+5. `Enter` on a history item populates the prompt editor for editing
+6. `Ctrl+S` submits — from history list (quick submit) or from prompt editor. `Enter` in normal mode also submits from prompt editor
+```
+
+---
+
+## Task 3: Run All Checks
+
+**Step 1: Run full verification**
+
+Run: `make pr-ready`
+Expected: All checks pass (lint + test + format check)
+
+**Step 2: Fix any issues**
+
+If lint flags unused variables: prefix with `_` or remove.
+If format differs: `make fmt` already ran in Task 1.
+
+---
+
+## Task 4: Commit
+
+**Step 1: Commit all changes**
+
+```bash
+git add lua/botglue/picker.lua README.md
+git commit -m "$(cat <<'EOF'
+feat(picker): rewrite with custom float windows, drop Telescope
+
+Replace Telescope-based picker with three custom float windows for full
+control over focus, keymaps, and borders. Telescope's results window had
+focusable=false which broke focus management, j/k navigation, CursorMoved
+preview, and border highlights.
+
+New architecture: Filter (1-line input) + List (cursorline, focusable) +
+Prompt editor (existing ui.lua factory). Fuzzy filtering via matchfuzzy.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+## Task 5: Manual Smoke Test
+
+Open Neovim, test all 6 scenarios from the design doc:
+
+- **A:** Quick reuse — `<leader>pp` → `j`/`k` → `Ctrl+S` → submitted
+- **B:** Reuse with edits — `j`/`k` → `Enter` → edit → `Enter` (normal) → submitted
+- **C:** Search history — `/` → type filter → `Enter` → edit → `Ctrl+S`
+- **D:** New prompt — `Tab` → type → `Enter` (normal) → submitted
+- **E:** Draft persistence — `Enter` on item → edit → `Tab` → browse → `Tab` → draft restored
+- **F:** No history — clear history file → `<leader>pp` → only Panel 3 opens
+
+Verify:
+- [ ] Yellow border on active panel, gray on inactive
+- [ ] Preview updates when navigating list with `j`/`k`
+- [ ] `Ctrl+J`/`Ctrl+K` navigate list from filter
+- [ ] Filter clears on `Esc` from filter
+- [ ] All `Esc`/`q` close all three panels
+- [ ] Model cycling with `Shift+Tab` in prompt

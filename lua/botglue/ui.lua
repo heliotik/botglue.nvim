@@ -40,6 +40,7 @@ function M.create_prompt_window(opts)
   opts = opts or {}
   local current_model = opts.model or config.options.model
   local models = config.options.models
+  local enter = opts.enter ~= false
 
   local height = 5
 
@@ -49,7 +50,7 @@ function M.create_prompt_window(opts)
 
   local buf = vim.api.nvim_create_buf(false, true)
 
-  local win = vim.api.nvim_open_win(buf, true, {
+  local win = vim.api.nvim_open_win(buf, enter, {
     relative = "editor",
     width = opts.width,
     height = height,

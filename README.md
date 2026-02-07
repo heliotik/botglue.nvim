@@ -6,7 +6,6 @@ Neovim plugin for AI-assisted inline code editing via Claude Code CLI. Select te
 
 - Neovim 0.10+
 - [Claude Code CLI](https://claude.ai/code) installed and available in PATH
-- [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim)
 
 ## Installation
 
@@ -15,7 +14,6 @@ Neovim plugin for AI-assisted inline code editing via Claude Code CLI. Select te
 ```lua
 {
   "heliotik/botglue.nvim",
-  dependencies = { "nvim-telescope/telescope.nvim" },
   config = function()
     require("botglue").setup()
   end,
@@ -27,7 +25,6 @@ Neovim plugin for AI-assisted inline code editing via Claude Code CLI. Select te
 ```lua
 use {
   "heliotik/botglue.nvim",
-  requires = { "nvim-telescope/telescope.nvim" },
   config = function()
     require("botglue").setup()
   end,
@@ -60,9 +57,9 @@ require("botglue").setup({
 1. Select code in visual mode (`v`, `V`, or `<C-v>`)
 2. Press `<leader>pp`
 3. Three-panel UI opens: filter, history list (sorted by frequency), prompt editor
-4. Browse history with `j`/`k`, filter by typing, or `Tab` to prompt editor
+4. Browse history with `j`/`k`, press `/` to filter, or `Tab` to prompt editor
 5. `Enter` on a history item populates the prompt editor for editing
-6. `Shift+Enter` submits — from history list (quick submit) or from prompt editor
+6. `Ctrl+S` submits — from history list (quick submit) or from prompt editor. `Enter` in normal mode also submits from prompt editor
 7. Inline progress extmarks appear around selection, result replaces it
 
 ### Controls
@@ -70,13 +67,21 @@ require("botglue").setup({
 **History list (Panel 2):**
 - `j`/`k` — navigate, preview shown in prompt editor
 - `Enter` — select and move to prompt editor
-- `Shift+Enter` — quick submit without editing
+- `Ctrl+S` — quick submit without editing
+- `/` — open filter
 - `Tab` — move to prompt editor
-- Type text — switch to filter
+- `Esc`/`q` — close
+
+**Filter (Panel 1):**
+- Type — fuzzy filter history list
+- `Ctrl+J`/`Ctrl+K` — navigate list without leaving filter
+- `Enter` — select top match, move to prompt editor
+- `Esc` — clear filter, return to list
+- `Tab` — move to prompt editor
 
 **Prompt editor (Panel 3):**
-- `Enter` — new line (standard vim behavior)
-- `Shift+Enter` — submit prompt
+- `Enter` — new line (insert mode) / submit (normal mode)
+- `Ctrl+S` — submit prompt (any mode)
 - `Shift+Tab` — cycle model (opus → sonnet → haiku)
 - `Tab` — return to history list
 - `q` / `Esc` — close (normal mode)
