@@ -2,6 +2,8 @@ local config = require("botglue.config")
 
 local M = {}
 
+local preview_ns = vim.api.nvim_create_namespace("botglue_preview")
+
 --- Cycle to next model in list. Pure function for testability.
 --- @param current string current model name
 --- @param models string[] ordered list of model names
@@ -31,40 +33,31 @@ function M._resolve_input(text, on_submit, on_cancel, model)
   end
 end
 
---- Open input window with model badge and cycling.
---- @param opts {prompt: string|nil, model: string|nil}
---- @param on_submit fun(prompt: string, model: string)
---- @param on_cancel fun()|nil
-function M.capture_input(opts, on_submit, on_cancel)
+--- Create a prompt editor window (panel 3) and return a handle.
+--- @param opts { width: number, row: number, col: number, model: string|nil }
+--- @return table handle with buf, win, and control methods
+function M.create_prompt_window(opts)
   opts = opts or {}
   local current_model = opts.model or config.options.model
   local models = config.options.models
 
-  local ui_info = vim.api.nvim_list_uis()[1]
-  local width = math.floor(ui_info.width * 2 / 3)
-  local height = 3
-  local row = math.floor((ui_info.height - height) / 2)
-  local col = math.floor((ui_info.width - width) / 2)
-
-  local buf = vim.api.nvim_create_buf(false, true)
-
-  local function make_title()
-    return " botglue "
-  end
+  local height = 5
 
   local function make_footer()
     return " [" .. current_model .. "] "
   end
 
+  local buf = vim.api.nvim_create_buf(false, true)
+
   local win = vim.api.nvim_open_win(buf, true, {
     relative = "editor",
-    width = width,
+    width = opts.width,
     height = height,
-    row = row,
-    col = col,
+    row = opts.row,
+    col = opts.col,
     style = "minimal",
     border = "rounded",
-    title = make_title(),
+    title = " prompt ",
     title_pos = "left",
     footer = make_footer(),
     footer_pos = "right",
@@ -72,59 +65,119 @@ function M.capture_input(opts, on_submit, on_cancel)
 
   vim.bo[buf].bufhidden = "wipe"
   vim.wo[win].wrap = true
+  vim.wo[win].number = true
+  vim.wo[win].relativenumber = true
 
-  -- Pre-fill prompt if provided
-  if opts.prompt and opts.prompt ~= "" then
-    local lines = vim.split(opts.prompt, "\n")
+  local handle = {}
+  handle.buf = buf
+  handle.win = win
+
+  --- Check if window and buffer still exist.
+  --- @return boolean
+  function handle.is_valid()
+    return vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_win_is_valid(win)
+  end
+
+  --- Read buffer content as a single string.
+  --- @return string
+  function handle.get_text()
+    if not handle.is_valid() then
+      return ""
+    end
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    return table.concat(lines, "\n")
+  end
+
+  --- Write text into the buffer.
+  --- @param text string
+  function handle.set_text(text)
+    if not handle.is_valid() then
+      return
+    end
+    local lines = vim.split(text, "\n")
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   end
 
-  local function close_window()
+  --- Show text as dimmed preview (Comment highlight), set buffer to non-modifiable.
+  --- @param text string
+  function handle.set_preview(text)
+    if not handle.is_valid() then
+      return
+    end
+    vim.bo[buf].modifiable = true
+    local lines = vim.split(text, "\n")
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.api.nvim_buf_clear_namespace(buf, preview_ns, 0, -1)
+    for i = 0, #lines - 1 do
+      vim.api.nvim_buf_add_highlight(buf, preview_ns, "Comment", i, 0, -1)
+    end
+    vim.bo[buf].modifiable = false
+  end
+
+  --- Restore editable mode, clear preview highlights, optionally set text.
+  --- @param text string
+  function handle.set_draft(text)
+    if not handle.is_valid() then
+      return
+    end
+    vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_clear_namespace(buf, preview_ns, 0, -1)
+    local lines = vim.split(text, "\n")
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  end
+
+  --- Get the current model name.
+  --- @return string
+  function handle.get_model()
+    return current_model
+  end
+
+  --- Set the current model and update the footer.
+  --- @param model string
+  function handle.set_model(model)
+    current_model = model
+    if handle.is_valid() then
+      vim.api.nvim_win_set_config(win, {
+        footer = make_footer(),
+        footer_pos = "right",
+      })
+    end
+  end
+
+  --- Cycle to the next model and update the footer.
+  function handle.cycle_model()
+    current_model = M._next_model(current_model, models)
+    if handle.is_valid() then
+      vim.api.nvim_win_set_config(win, {
+        footer = make_footer(),
+        footer_pos = "right",
+      })
+    end
+  end
+
+  --- Focus this window.
+  function handle.focus()
+    if handle.is_valid() then
+      vim.api.nvim_set_current_win(win)
+    end
+  end
+
+  --- Update the border highlight group.
+  --- @param hl_group string
+  function handle.set_border_hl(hl_group)
+    if handle.is_valid() then
+      vim.api.nvim_set_option_value("winhl", "FloatBorder:" .. hl_group, { win = win })
+    end
+  end
+
+  --- Close the window safely.
+  function handle.close()
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)
     end
   end
 
-  local function submit()
-    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-    local text = table.concat(lines, "\n")
-    close_window()
-    M._resolve_input(text, on_submit, on_cancel, current_model)
-  end
-
-  local function newline()
-    local cursor_row, cursor_col = unpack(vim.api.nvim_win_get_cursor(win))
-    local line = vim.api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1]
-    local before = line:sub(1, cursor_col)
-    local after = line:sub(cursor_col + 1)
-    vim.api.nvim_buf_set_lines(buf, cursor_row - 1, cursor_row, false, { before, after })
-    vim.api.nvim_win_set_cursor(win, { cursor_row + 1, 0 })
-  end
-
-  local function cycle_model()
-    current_model = M._next_model(current_model, models)
-    vim.api.nvim_win_set_config(win, {
-      footer = make_footer(),
-      footer_pos = "right",
-    })
-  end
-
-  local function cancel()
-    close_window()
-    if on_cancel then
-      on_cancel()
-    end
-  end
-
-  vim.keymap.set("i", "<CR>", submit, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "<CR>", submit, { buffer = buf, nowait = true })
-  vim.keymap.set("i", "<S-CR>", newline, { buffer = buf, nowait = true })
-  vim.keymap.set("i", "<C-s>", cycle_model, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "<C-s>", cycle_model, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "q", cancel, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "<Esc>", cancel, { buffer = buf, nowait = true })
-
-  vim.cmd("startinsert")
+  return handle
 end
 
 return M
