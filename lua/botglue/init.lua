@@ -2,7 +2,6 @@ local config = require("botglue.config")
 local operations = require("botglue.operations")
 local history = require("botglue.history")
 local picker = require("botglue.picker")
-local ui = require("botglue.ui")
 
 local M = {}
 
@@ -18,6 +17,10 @@ function M.setup(opts)
 end
 
 function M.run()
+  -- Exit visual mode to update '< and '> marks for current selection.
+  local esc = vim.api.nvim_replace_termcodes("<Esc>", true, false, true)
+  vim.api.nvim_feedkeys(esc, "nx", false)
+
   -- Capture selection in original buffer before any UI changes context
   local sel = operations.get_visual_selection()
   if not sel or sel.text == "" then
@@ -25,23 +28,9 @@ function M.run()
     return
   end
 
-  picker.open(function(entry)
-    if not entry then
-      -- Empty selection, open blank input
-      ui.capture_input({}, function(prompt, model)
-        history.add(prompt, model)
-        operations.run(prompt, model, sel)
-      end)
-      return
-    end
-
-    ui.capture_input({
-      prompt = entry.prompt,
-      model = entry.model,
-    }, function(prompt, model)
-      history.add(prompt, model)
-      operations.run(prompt, model, sel)
-    end)
+  picker.open(function(prompt, model)
+    history.add(prompt, model)
+    operations.run(prompt, model, sel)
   end)
 end
 
