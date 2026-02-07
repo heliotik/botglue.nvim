@@ -465,11 +465,9 @@ function M._open_full(entries, on_submit)
       filtered_entries = all_entries
     else
       local display_strings = {}
-      local display_to_entries = {}
       for _, e in ipairs(all_entries) do
         local d = e.prompt:gsub("\n", " ")
         table.insert(display_strings, d)
-        display_to_entries[d] = e
       end
       local result = vim.fn.matchfuzzypos(display_strings, text)
       local matched = result[1]
