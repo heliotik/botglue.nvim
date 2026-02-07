@@ -263,7 +263,6 @@ function M._open_full(entries, on_submit)
   local closed = false
   local autocmd_ids = {}
   local match_positions = {}
-  local list_ns = vim.api.nvim_create_namespace("botglue_list")
   local filter_hl_ns = vim.api.nvim_create_namespace("botglue_filter_hl")
 
   -- Layout: container interior rows
@@ -396,40 +395,31 @@ function M._open_full(entries, on_submit)
 
   local function render_list()
     local lines = {}
-    local available = inner_width - 2
-    for _, entry in ipairs(filtered_entries) do
-      local display = entry.prompt:gsub("\n", " ")
-      local prompt_text = M._truncate_prompt(display, available)
-      table.insert(lines, "  " .. prompt_text)
-    end
-    if #lines == 0 then
-      lines = { "  (no matches)" }
+    if #filtered_entries == 0 then
+      lines = { M._format_list_line(nil, nil, inner_width) }
+    else
+      for _, entry in ipairs(filtered_entries) do
+        table.insert(lines, M._format_list_line(entry.prompt, entry.model, inner_width))
+      end
     end
     vim.bo[list_buf].modifiable = true
     vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, lines)
-    -- Model tags as right-aligned extmarks
-    vim.api.nvim_buf_clear_namespace(list_buf, list_ns, 0, -1)
-    for i, entry in ipairs(filtered_entries) do
-      vim.api.nvim_buf_set_extmark(list_buf, list_ns, i - 1, 0, {
-        virt_text = { { "[" .. entry.model .. "]", "Comment" } },
-        virt_text_pos = "right_align",
-      })
-    end
     -- Highlight fuzzy match positions
     vim.api.nvim_buf_clear_namespace(list_buf, filter_hl_ns, 0, -1)
     for i, entry in ipairs(filtered_entries) do
-      local positions = match_positions[entry.prompt]
+      local display = entry.prompt:gsub("\n", " ")
+      local positions = match_positions[display]
       if positions then
-        for _, pos in ipairs(positions) do
-          local byte_pos = pos + 2
+        local byte_ranges = M._char_to_byte_positions(lines[i], positions, 1)
+        for _, range in ipairs(byte_ranges) do
           pcall(
             vim.api.nvim_buf_add_highlight,
             list_buf,
             filter_hl_ns,
             "Search",
             i - 1,
-            byte_pos,
-            byte_pos + 1
+            range[1],
+            range[2]
           )
         end
       end
@@ -474,21 +464,27 @@ function M._open_full(entries, on_submit)
     if text == "" then
       filtered_entries = all_entries
     else
-      local prompts = vim.tbl_map(function(e)
-        return e.prompt
-      end, all_entries)
-      local result = vim.fn.matchfuzzypos(prompts, text)
+      local display_strings = {}
+      local display_to_entries = {}
+      for _, e in ipairs(all_entries) do
+        local d = e.prompt:gsub("\n", " ")
+        table.insert(display_strings, d)
+        display_to_entries[d] = e
+      end
+      local result = vim.fn.matchfuzzypos(display_strings, text)
       local matched = result[1]
       local positions = result[2]
-      local matched_map = {}
+      local matched_set = {}
       for i, m in ipairs(matched) do
-        matched_map[m] = positions[i]
+        match_positions[m] = positions[i]
+        matched_set[m] = true
       end
-      filtered_entries = vim.tbl_filter(function(e)
-        return matched_map[e.prompt] ~= nil
-      end, all_entries)
-      for _, e in ipairs(filtered_entries) do
-        match_positions[e.prompt] = matched_map[e.prompt]
+      filtered_entries = {}
+      for _, e in ipairs(all_entries) do
+        local d = e.prompt:gsub("\n", " ")
+        if matched_set[d] then
+          table.insert(filtered_entries, e)
+        end
       end
     end
     selected_idx = 1
