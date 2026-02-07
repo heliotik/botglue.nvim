@@ -269,6 +269,7 @@ describe("botglue.operations", function()
       assert.equals(2, mock_claude._last_ctx.end_line)
       assert.equals("sonnet", mock_claude._last_ctx.model)
       assert.equals("simplify", mock_claude._last_prompt)
+      assert.equals("line two", mock_claude._last_ctx.selected_text)
     end)
 
     it("replaces selection on successful completion", function()

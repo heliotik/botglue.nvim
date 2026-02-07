@@ -93,7 +93,7 @@ describe("botglue.claude", function()
       assert.equals("the answer", claude._extract_result(chunks))
     end)
 
-    it("accumulates text from assistant messages", function()
+    it("returns last assistant text when no result chunk", function()
       local chunks = {
         vim.json.encode({
           type = "assistant",
@@ -108,7 +108,7 @@ describe("botglue.claude", function()
           },
         }),
       }
-      assert.equals("hello world", claude._extract_result(chunks))
+      assert.equals("world", claude._extract_result(chunks))
     end)
 
     it("prefers type=result over accumulated assistant text", function()
@@ -152,6 +152,18 @@ describe("botglue.claude", function()
         }),
       }
       assert.is_nil(claude._extract_result(chunks))
+    end)
+
+    it("returns error string for result chunk without text", function()
+      local chunks = {
+        vim.json.encode({
+          type = "result",
+          subtype = "error_max_turns",
+        }),
+      }
+      local result, err = claude._extract_result(chunks)
+      assert.is_nil(result)
+      assert.matches("error_max_turns", err)
     end)
 
     it("ignores invalid JSON chunks", function()
