@@ -80,32 +80,87 @@ describe("botglue.claude", function()
       assert.is_nil(claude._extract_result({}))
     end)
 
-    it("extracts result from parsed.result field", function()
+    it("extracts result from type=result line", function()
       local chunks = {
-        vim.json.encode({ type = "other", data = "noise" }),
-        vim.json.encode({ result = "the answer" }),
+        vim.json.encode({ type = "system", subtype = "init" }),
+        vim.json.encode({
+          type = "result",
+          subtype = "success",
+          result = "the answer",
+        }),
       }
       assert.equals("the answer", claude._extract_result(chunks))
     end)
 
-    it("accumulates text_delta events", function()
+    it("accumulates text from assistant messages", function()
       local chunks = {
         vim.json.encode({
-          type = "stream_event",
-          event = { delta = { type = "text_delta", text = "hello " } },
+          type = "assistant",
+          message = {
+            content = { { type = "text", text = "hello " } },
+          },
         }),
         vim.json.encode({
-          type = "stream_event",
-          event = { delta = { type = "text_delta", text = "world" } },
+          type = "assistant",
+          message = {
+            content = { { type = "text", text = "world" } },
+          },
         }),
       }
       assert.equals("hello world", claude._extract_result(chunks))
     end)
 
+    it("prefers type=result over accumulated assistant text", function()
+      local chunks = {
+        vim.json.encode({
+          type = "assistant",
+          message = {
+            content = { { type = "text", text = "partial" } },
+          },
+        }),
+        vim.json.encode({
+          type = "result",
+          subtype = "success",
+          result = "final result",
+        }),
+      }
+      assert.equals("final result", claude._extract_result(chunks))
+    end)
+
+    it("ignores tool_use blocks in assistant messages", function()
+      local chunks = {
+        vim.json.encode({
+          type = "assistant",
+          message = {
+            content = {
+              { type = "text", text = "code here" },
+              { type = "tool_use", name = "Read", input = {} },
+            },
+          },
+        }),
+      }
+      assert.equals("code here", claude._extract_result(chunks))
+    end)
+
+    it("ignores system and user events", function()
+      local chunks = {
+        vim.json.encode({ type = "system", subtype = "init" }),
+        vim.json.encode({
+          type = "user",
+          message = { content = { { type = "tool_result" } } },
+        }),
+      }
+      assert.is_nil(claude._extract_result(chunks))
+    end)
+
     it("ignores invalid JSON chunks", function()
       local chunks = {
         "not json at all",
-        vim.json.encode({ result = "valid result" }),
+        vim.json.encode({
+          type = "result",
+          subtype = "success",
+          result = "valid result",
+        }),
         "more garbage",
       }
       assert.equals("valid result", claude._extract_result(chunks))
@@ -113,20 +168,9 @@ describe("botglue.claude", function()
 
     it("returns nil when no result found", function()
       local chunks = {
-        vim.json.encode({ type = "other", data = "no result here" }),
+        vim.json.encode({ type = "system", subtype = "init" }),
       }
       assert.is_nil(claude._extract_result(chunks))
-    end)
-
-    it("prefers parsed.result over text_delta", function()
-      local chunks = {
-        vim.json.encode({
-          type = "stream_event",
-          event = { delta = { type = "text_delta", text = "partial" } },
-        }),
-        vim.json.encode({ result = "final result" }),
-      }
-      assert.equals("final result", claude._extract_result(chunks))
     end)
   end)
 
