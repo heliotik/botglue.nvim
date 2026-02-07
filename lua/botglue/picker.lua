@@ -68,30 +68,101 @@ function M._open_prompt_only(on_submit)
   setup_highlights()
   local width, col, row = layout_dimensions()
 
-  local handle = ui.create_prompt_window({
+  local current_model = config.options.model
+  local models = config.options.models
+
+  local prompt_height = 5
+  local container_height = prompt_height
+
+  -- Container (background frame)
+  local container_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[container_buf].bufhidden = "wipe"
+  local container_lines = {}
+  for _ = 1, container_height do
+    table.insert(container_lines, string.rep(" ", width))
+  end
+  vim.api.nvim_buf_set_lines(container_buf, 0, -1, false, container_lines)
+
+  local function make_footer()
+    return " [" .. current_model .. "] "
+  end
+
+  local container_win = vim.api.nvim_open_win(container_buf, false, {
+    relative = "editor",
     width = width,
+    height = container_height,
     row = row,
     col = col,
-    model = config.options.model,
+    style = "minimal",
+    border = "rounded",
+    title = " BotGlue ",
+    title_pos = "center",
+    footer = make_footer(),
+    footer_pos = "right",
+    focusable = false,
+    zindex = 40,
+  })
+  vim.api.nvim_set_option_value("winhl", "FloatBorder:" .. ACTIVE_HL, { win = container_win })
+
+  -- Prompt panel (inside container, no border)
+  local handle = ui.create_prompt_window({
+    width = width,
+    row = row + 1,
+    col = col + 1,
+    model = current_model,
+    no_border = true,
+    no_footer = true,
+    zindex = 50,
   })
 
-  handle.set_border_hl(ACTIVE_HL)
+  -- Prompt placeholder
+  local placeholder_ns = vim.api.nvim_create_namespace("botglue_prompt_placeholder")
+  local function update_prompt_placeholder()
+    if not handle.is_valid() then
+      return
+    end
+    vim.api.nvim_buf_clear_namespace(handle.buf, placeholder_ns, 0, -1)
+    local text = vim.api.nvim_buf_get_lines(handle.buf, 0, 1, false)[1] or ""
+    if text == "" then
+      vim.api.nvim_buf_set_extmark(handle.buf, placeholder_ns, 0, 0, {
+        virt_text = { { "Type your prompt here...", "Comment" } },
+        virt_text_pos = "overlay",
+      })
+    end
+  end
+  update_prompt_placeholder()
 
   local closed = false
+  local autocmd_ids = {}
+
   local function close_all()
     if closed then
       return
     end
     closed = true
+    for _, id in ipairs(autocmd_ids) do
+      pcall(vim.api.nvim_del_autocmd, id)
+    end
     handle.close()
+    if vim.api.nvim_win_is_valid(container_win) then
+      vim.api.nvim_win_close(container_win, true)
+    end
+  end
+
+  local function update_container_footer()
+    if vim.api.nvim_win_is_valid(container_win) then
+      vim.api.nvim_win_set_config(container_win, {
+        footer = make_footer(),
+        footer_pos = "right",
+      })
+    end
   end
 
   local function submit()
     local text = vim.trim(handle.get_text())
-    local model = handle.get_model()
     close_all()
     if text ~= "" then
-      on_submit(text, model)
+      on_submit(text, current_model)
     end
   end
 
@@ -99,10 +170,48 @@ function M._open_prompt_only(on_submit)
   vim.keymap.set("n", "<CR>", submit, { buffer = buf })
   vim.keymap.set({ "i", "n" }, "<C-s>", submit, { buffer = buf })
   vim.keymap.set({ "i", "n" }, "<S-Tab>", function()
-    handle.cycle_model()
+    current_model = ui._next_model(current_model, models)
+    handle.set_model(current_model)
+    update_container_footer()
   end, { buffer = buf })
   vim.keymap.set("n", "<Esc>", close_all, { buffer = buf })
   vim.keymap.set("n", "q", close_all, { buffer = buf })
+
+  -- Prompt placeholder autocmd
+  table.insert(
+    autocmd_ids,
+    vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+      buffer = buf,
+      callback = function()
+        if closed then
+          return
+        end
+        update_prompt_placeholder()
+      end,
+    })
+  )
+
+  -- Close on focus loss
+  table.insert(
+    autocmd_ids,
+    vim.api.nvim_create_autocmd("WinLeave", {
+      buffer = buf,
+      callback = function()
+        if closed then
+          return
+        end
+        vim.schedule(function()
+          if closed then
+            return
+          end
+          local cur = vim.api.nvim_get_current_win()
+          if cur ~= handle.win and cur ~= container_win then
+            close_all()
+          end
+        end)
+      end,
+    })
+  )
 end
 
 --- Open the full three-panel UI with custom float windows.
