@@ -42,6 +42,7 @@ function M.build_command(prompt, ctx)
     ctx.model,
     "--max-turns",
     tostring(config.options.max_turns),
+    "--strict-mcp-config",
     "--append-system-prompt",
     system_prompt,
   }

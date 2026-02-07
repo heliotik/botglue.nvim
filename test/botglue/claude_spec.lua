@@ -24,6 +24,7 @@ describe("botglue.claude", function()
       assert.is_truthy(vim.tbl_contains(cmd, "--output-format"))
       assert.is_truthy(vim.tbl_contains(cmd, "--verbose"))
       assert.is_truthy(vim.tbl_contains(cmd, "--allowedTools"))
+      assert.is_truthy(vim.tbl_contains(cmd, "--strict-mcp-config"))
     end)
 
     it("includes model flag", function()
