@@ -36,10 +36,11 @@ Modular structure in `lua/botglue/`:
 
 Unified container frame ("BotGlue" title, model badge footer) with three borderless inner panels:
 - **Panel 1:** Filter — single-line fuzzy filter with placeholder hint, `matchfuzzypos` for match highlighting
-- **Panel 2:** History list — sorted by frequency, model tags as right-aligned extmarks (`Comment` hl)
+- **Panel 2:** History list — sorted by frequency, model tags inline with space-padding to full width
 - **Panel 3:** Prompt editor — with relativenumber, wrap, placeholder text
 
 Panels separated by labeled horizontal dividers ("Recent prompts", "Prompt") in the container buffer, highlighted with `FloatBorder`. Container uses `zindex = 40`, inner panels `zindex = 50`.
+Active panel indicated by yellow (`BotglueActiveBorder`) highlight on its divider label; container border uses default `FloatBorder`.
 
 Key behaviors:
 - Tab cycles focus between List and Prompt panels
@@ -73,7 +74,7 @@ Key behaviors:
 
 ## Testing
 
-71 tests using plenary.nvim, located in `test/botglue/`:
+80 tests using plenary.nvim, located in `test/botglue/`:
 
 | File | Tests | Covers |
 |------|-------|--------|
@@ -83,7 +84,7 @@ Key behaviors:
 | `history_spec.lua` | 6 | Add, dedup, sort, disk persistence |
 | `operations_spec.lua` | 16 | `replace_selection`, `get_visual_selection`, `run()` with mocked claude |
 | `ui_spec.lua` | 9 | `_next_model` cycling, `_resolve_input` submit/cancel, `create_prompt_window` |
-| `picker_spec.lua` | 10 | Module exports, `_make_divider` width/truncation/empty, `_truncate_prompt` ASCII/UTF-8/CJK |
+| `picker_spec.lua` | 19 | Module exports, `_make_divider`, `_truncate_prompt`, `_format_list_line`, `_char_to_byte_positions` |
 
 ```bash
 # Run all tests
@@ -108,7 +109,8 @@ nvim --headless -u test/minimal_init.lua -c "PlenaryBustedFile test/botglue/conf
 - `nvim_buf_set_mark` col is 0-indexed, `getpos` returns 1-indexed columns — off-by-one source
 - Container float uses `zindex = 40`, inner panels `zindex = 50` — incorrect zindex causes panels to render behind the container
 - `WinLeave` autocmd must use `vim.schedule` before checking `nvim_get_current_win` — at `WinLeave` time the current window hasn't updated yet
-- `matchfuzzypos` returns 0-indexed byte positions — offset by 2 for `"  "` left padding when highlighting list lines
+- `matchfuzzypos` returns 0-indexed **character** positions — use `vim.fn.byteidx()` to convert to byte offsets for `nvim_buf_add_highlight`; see `_char_to_byte_positions` helper
+- Autocomplete suppression: set `vim.b[buf].cmp_enabled = false` (nvim-cmp) and `vim.b[buf].completion = false` (blink.cmp) — `vim.b[buf].cmp = false` alone is insufficient
 
 ## Code Style
 
