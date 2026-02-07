@@ -51,25 +51,28 @@ end
 --- @param prompt string
 --- @param ctx table
 --- @param observer table {on_stdout: fn(parsed), on_complete: fn(err, result)}
+--- @return table handle {job_id: number}
 function M.start(prompt, ctx, observer)
-  if M._active_job and M._active_job > 0 then
-    observer.on_complete("Another request is already running", nil)
-    return
-  end
-
   local cmd = M.build_command(prompt, ctx)
   local stdout_chunks = {}
   local partial = ""
+  local handle = {}
 
-  M._cancel_reason = nil
-  M._active_job = vim.fn.jobstart(cmd, {
+  local function clear_timeout()
+    if handle.timeout_timer then
+      handle.timeout_timer:stop()
+      handle.timeout_timer:close()
+      handle.timeout_timer = nil
+    end
+  end
+
+  handle.job_id = vim.fn.jobstart(cmd, {
     stdout_buffered = false,
     stderr_buffered = false,
     on_stdout = function(_, data)
       if not data then
         return
       end
-      -- Handle partial lines: last element may be incomplete
       data[1] = partial .. data[1]
       partial = data[#data]
       for i = 1, #data - 1 do
@@ -87,18 +90,8 @@ function M.start(prompt, ctx, observer)
     end,
     on_stderr = function() end,
     on_exit = function(_, code)
-      M._clear_timeout()
-      M._active_job = nil
-
-      -- If cancelled (by user or timeout), use the cancel reason
-      local reason = M._cancel_reason
-      M._cancel_reason = nil
-      if reason then
-        vim.schedule(function()
-          observer.on_complete(reason, nil)
-        end)
-        return
-      end
+      clear_timeout()
+      handle.job_id = nil
 
       if code ~= 0 then
         vim.schedule(function()
@@ -118,13 +111,25 @@ function M.start(prompt, ctx, observer)
     end,
   })
 
-  if M._active_job <= 0 then
-    M._active_job = nil
+  if handle.job_id <= 0 then
+    handle.job_id = nil
     observer.on_complete("Failed to start Claude process", nil)
-    return
+    return handle
   end
 
-  M._start_timeout(config.options.timeout)
+  handle.timeout_timer = vim.uv.new_timer()
+  handle.timeout_timer:start(
+    config.options.timeout * 1000,
+    0,
+    vim.schedule_wrap(function()
+      if handle.job_id then
+        vim.fn.jobstop(handle.job_id)
+      end
+      clear_timeout()
+    end)
+  )
+
+  return handle
 end
 
 --- Extract the final text result from stream-json chunks.
