@@ -55,13 +55,6 @@ local function layout_dimensions()
   return width, col, row
 end
 
---- Set border highlight on any float window via winhl.
-local function set_border_hl(win, hl_group)
-  if vim.api.nvim_win_is_valid(win) then
-    vim.api.nvim_set_option_value("winhl", "FloatBorder:" .. hl_group, { win = win })
-  end
-end
-
 --- Open only Panel 3 (no history to show).
 --- @param on_submit fun(prompt: string, model: string)
 function M._open_prompt_only(on_submit)
