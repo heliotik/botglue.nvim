@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-botglue.nvim is a Neovim plugin for AI-assisted inline code editing via Claude Code CLI. Users select text in visual mode, pick or type a prompt via Telescope, and the AI replaces the selection with the result. Progress is shown inline via extmarks.
+botglue.nvim is a Neovim plugin for AI-assisted inline code editing via Claude Code CLI. Users select text in visual mode, pick or type a prompt via a custom three-panel float UI, and the AI replaces the selection with the result. Progress is shown inline via extmarks.
 
 ## Development Commands
 
@@ -26,35 +26,38 @@ Modular structure in `lua/botglue/`:
 - `ui.lua` — Prompt editor window factory (`create_prompt_window`), model cycling, input resolution
 - `display.lua` — Mark and RequestStatus classes for extmark-based inline progress
 - `history.lua` — JSON persistence for prompt history with frequency sorting
-- `picker.lua` — Three-panel UI orchestrator: Telescope (filter + history list) + prompt editor
+- `picker.lua` — Three-panel UI orchestrator: container frame with filter, history list, prompt editor
 
 ### Dependencies
 
-- **Required:** `telescope.nvim`
 - **Required:** Claude Code CLI (`claude`) in PATH
 
 ### UI Architecture
 
-Three-panel unified interface:
-- **Panel 1:** Filter (Telescope prompt) — fzf-style filtering of history
-- **Panel 2:** History list (Telescope results) — sorted by frequency, focus starts here
-- **Panel 3:** Prompt editor (custom float) — with relativenumber, model badge footer
+Unified container frame ("BotGlue" title, model badge footer) with three borderless inner panels:
+- **Panel 1:** Filter — single-line fuzzy filter with placeholder hint, `matchfuzzypos` for match highlighting
+- **Panel 2:** History list — sorted by frequency, model tags as right-aligned extmarks (`Comment` hl)
+- **Panel 3:** Prompt editor — with relativenumber, wrap, placeholder text
+
+Panels separated by labeled horizontal dividers ("Recent prompts", "Prompt") in the container buffer, highlighted with `FloatBorder`. Container uses `zindex = 40`, inner panels `zindex = 50`.
 
 Key behaviors:
 - Tab cycles focus between List and Prompt panels
+- `/` focuses filter from list
 - Enter on list item populates Prompt and moves focus there
-- Shift+Enter submits (from list: quick submit; from prompt: submit edited)
-- Shift+Tab in prompt cycles model
+- Ctrl+S submits (from list: quick submit; from prompt: submit edited)
+- Shift+Tab in prompt cycles model (updates container footer)
 - Draft/preview model: browsing shows preview; editing saves draft; draft persists across focus switches
-- Empty history: only Prompt panel opens (no Telescope)
+- Empty history: only Prompt panel opens (container + prompt, with placeholder)
+- UI auto-closes on focus loss (WinLeave + vim.schedule)
 
 ### Data Flow
 
 ```
 <leader>pp (visual mode)
-  → picker.open(on_submit) — unified three-panel UI
-    → Panel 1+2: Telescope with history sorted by frequency
-    → Panel 3: prompt editor with model badge, Shift+Tab cycling
+  → picker.open(on_submit) — container frame + three inner panels
+    → Container: "BotGlue" title, model footer, divider lines
+    → Panel 1: filter (matchfuzzypos), Panel 2: history list, Panel 3: prompt editor
     → on_submit(prompt, model)
   → history.add(prompt, model)
   → operations.run(prompt, model, sel)
@@ -70,7 +73,7 @@ Key behaviors:
 
 ## Testing
 
-62 tests using plenary.nvim, located in `test/botglue/`:
+71 tests using plenary.nvim, located in `test/botglue/`:
 
 | File | Tests | Covers |
 |------|-------|--------|
@@ -80,7 +83,7 @@ Key behaviors:
 | `history_spec.lua` | 6 | Add, dedup, sort, disk persistence |
 | `operations_spec.lua` | 16 | `replace_selection`, `get_visual_selection`, `run()` with mocked claude |
 | `ui_spec.lua` | 9 | `_next_model` cycling, `_resolve_input` submit/cancel, `create_prompt_window` |
-| `picker_spec.lua` | 3 | Module exports: `open`, `_open_prompt_only`, `_open_full` |
+| `picker_spec.lua` | 10 | Module exports, `_make_divider` width/truncation/empty, `_truncate_prompt` ASCII/UTF-8/CJK |
 
 ```bash
 # Run all tests
@@ -103,7 +106,9 @@ nvim --headless -u test/minimal_init.lua -c "PlenaryBustedFile test/botglue/conf
 - Mocking: must clear ALL modules in the dependency chain from `package.loaded`, not just the target
 - `nvim_list_uis()` returns empty in headless tests — UI code (floating windows) cannot be tested directly
 - `nvim_buf_set_mark` col is 0-indexed, `getpos` returns 1-indexed columns — off-by-one source
-- Telescope's `attach_mappings` callback runs synchronously, but panel 3 creation must be deferred with `vim.schedule` to wait for Telescope's window layout
+- Container float uses `zindex = 40`, inner panels `zindex = 50` — incorrect zindex causes panels to render behind the container
+- `WinLeave` autocmd must use `vim.schedule` before checking `nvim_get_current_win` — at `WinLeave` time the current window hasn't updated yet
+- `matchfuzzypos` returns 0-indexed byte positions — offset by 2 for `"  "` left padding when highlighting list lines
 
 ## Code Style
 
