@@ -54,7 +54,7 @@ function M._format_list_line(prompt, model, inner_width)
   local left_pad = 1
   local right_pad = 1
   local tag = "[" .. model .. "]"
-  local tag_w = #tag
+  local tag_w = vim.fn.strdisplaywidth(tag)
   local available = inner_width - left_pad - right_pad - tag_w
   local display = prompt:gsub("\n", " ")
   local prompt_text = M._truncate_prompt(display, available)

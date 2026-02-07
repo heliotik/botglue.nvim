@@ -182,14 +182,6 @@ function M.create_prompt_window(opts)
     end
   end
 
-  --- Update the border highlight group.
-  --- @param hl_group string
-  function handle.set_border_hl(hl_group)
-    if handle.is_valid() then
-      vim.api.nvim_set_option_value("winhl", "FloatBorder:" .. hl_group, { win = win })
-    end
-  end
-
   --- Close the window safely.
   function handle.close()
     if vim.api.nvim_win_is_valid(win) then
