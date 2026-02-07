@@ -676,22 +676,26 @@ botglue.nvim — Neovim-плагин для AI-инлайн-редактиров
   1. #tag → vim.fn.strdisplaywidth(tag) for consistent UTF-8 handling
   2. Removed dead handle.set_border_hl from ui.lua
 
-Предложения по хукам
+  Hooks Suggestions
 
-- Хук pre-commit с make fmt: устранил бы отдельный коммит только для форматирования. stylua достаточно быстрый, чтобы запускать его при каждом коммите.
-- Хук pre-push с make pr-ready: позволил бы отловить предупреждения линтера (например, неиспользуемую переменную display_to_entries) до пуша.
-В данном случае это было обнаружено только на Задаче 6.
+  - Pre-commit hook with make fmt: Would prevent the style-only commit step. stylua is fast enough to run on every commit.
+  - Pre-push hook with make pr-ready: Would catch lint warnings (like the unused display_to_entries variable) before pushing.
+  Currently this was caught only at Task 6.
 
-Предложения по навыкам (Skills)
+  Skills Suggestions
 
-- Паттерны extmark/virt_text в Neovim: преобразование через byteidx, различия strdisplaywidth и #string, ограничения right_align — это переиспользуемые знания, которые можно оформить как навык для будущей работы с UI в Neovim.
-- Навык интеграции matchfuzzypos: паттерн «сопоставить с отображаемыми строками, преобразовать символьные позиции в байтовые через byteidx» неочевиден и сэкономил бы время на отладку в будущих проектах.
+  - Neovim extmark/virt_text patterns: The byteidx conversion, strdisplaywidth vs #string, right_align limitations — these are
+  reusable knowledge that could be captured as a skill for future Neovim UI work.
+  - matchfuzzypos integration skill: The pattern of "match against display strings, convert char positions to byte positions via
+  byteidx" is non-obvious and would save debugging time on future projects.
 
-Улучшения агентов
+  Agent Improvements
 
-- Параллельное выполнение сработало хорошо: Задачи 1, 4, 5 выполнялись параллельно без конфликтов. У Задачи 4 было незначительное примечание о ранее существовавшем падении теста (из-за выполнявшейся Задачи 1), но это разрешилось само собой.
-- Фрагменты кода в проектном документе: переменная display_to_entries присутствовала в коде проектного документа, но на практике не использовалась. Субагенты добросовестно её скопировали. Вывод: линтер должен запускаться как часть шага коммита каждого субагента, а не только при финальной валидации.
-- Задача 7 (мёртвый код) была избыточной: Задача 3 уже удалила list_ns. Можно объединить «переписывание + очистка» в одну задачу.
+  - Parallel execution worked well: Tasks 1, 4, 5 ran in parallel without conflicts. Task 4 had a minor pre-existing test failure note
+   (from Task 1 being in-flight) but this self-resolved.
+  - Design doc code snippets: The display_to_entries variable was in the design doc code but unused in practice. Subagents faithfully
+  copied it. Lesson: lint should be run as part of each subagent's commit step, not just at final validation.
+  - Task 7 (dead code) was redundant: Task 3 already removed list_ns. Could combine "rewrite + cleanup" into one task.
 
 ---
 
