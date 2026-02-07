@@ -14,9 +14,6 @@ function M.setup(opts)
     vim.keymap.set("x", "<leader>pp", function()
       M.run()
     end, { desc = "Botglue: run", silent = true })
-    vim.keymap.set("x", "<leader>ps", function()
-      M.cancel()
-    end, { desc = "Botglue: cancel", silent = true })
   end
 end
 
@@ -46,10 +43,6 @@ function M.run()
       operations.run(prompt, model, sel)
     end)
   end)
-end
-
-function M.cancel()
-  operations.cancel()
 end
 
 return M

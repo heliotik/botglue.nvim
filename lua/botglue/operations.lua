@@ -105,9 +105,6 @@ function M.run(prompt, model, sel)
     bottom_mark:delete()
   end
 
-  -- Store cleanup for external cancel
-  M._cleanup = cleanup
-
   top_status:start()
   bottom_status:start()
 
@@ -145,15 +142,6 @@ function M.run(prompt, model, sel)
       vim.notify("botglue: done", vim.log.levels.INFO)
     end,
   })
-end
-
-function M.cancel()
-  claude.cancel()
-  if M._cleanup then
-    M._cleanup()
-    M._cleanup = nil
-  end
-  vim.notify("botglue: cancelled", vim.log.levels.WARN)
 end
 
 return M
