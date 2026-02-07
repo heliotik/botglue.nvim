@@ -6,8 +6,8 @@ local M = {}
 
 --- Ensure BotglueActiveBorder highlight group exists.
 local function ensure_highlights()
-  local ok = pcall(vim.api.nvim_get_hl_by_name, "BotglueActiveBorder", true)
-  if not ok or vim.tbl_isempty(vim.api.nvim_get_hl_by_name("BotglueActiveBorder", true)) then
+  local hl = vim.api.nvim_get_hl(0, { name = "BotglueActiveBorder" })
+  if vim.tbl_isempty(hl) then
     vim.api.nvim_set_hl(0, "BotglueActiveBorder", { link = "DiagnosticWarn" })
   end
 end
@@ -179,16 +179,16 @@ function M._open_full(entries, on_submit)
 
   --- Focus Telescope results, making it active.
   local function focus_telescope(prompt_bufnr)
-    if prompt_handle and prompt_handle.is_valid() then
-      prompt_handle.set_border_hl("FloatBorder")
-    end
-    -- Return focus to Telescope prompt buffer's associated results window
     local picker_obj = action_state.get_current_picker(prompt_bufnr)
     if
       picker_obj
       and picker_obj.results_win
       and vim.api.nvim_win_is_valid(picker_obj.results_win)
     then
+      -- Only change border if focus switch will succeed
+      if prompt_handle and prompt_handle.is_valid() then
+        prompt_handle.set_border_hl("FloatBorder")
+      end
       vim.api.nvim_set_current_win(picker_obj.results_win)
     end
   end
