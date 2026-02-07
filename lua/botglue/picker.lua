@@ -39,6 +39,30 @@ function M._truncate_prompt(text, max_width)
   return "…"
 end
 
+--- Format a single list line with inline model tag, padded to full width.
+--- Returns nil-prompt as a "(no matches)" placeholder line.
+--- @param prompt string|nil raw prompt text (may contain newlines)
+--- @param model string|nil model name
+--- @param inner_width number target display width
+--- @return string formatted line of exactly inner_width display columns
+function M._format_list_line(prompt, model, inner_width)
+  if not prompt then
+    local placeholder = " (no matches)"
+    local pad = inner_width - vim.fn.strdisplaywidth(placeholder)
+    return placeholder .. string.rep(" ", math.max(pad, 0))
+  end
+  local left_pad = 1
+  local right_pad = 1
+  local tag = "[" .. model .. "]"
+  local tag_w = #tag
+  local available = inner_width - left_pad - right_pad - tag_w
+  local display = prompt:gsub("\n", " ")
+  local prompt_text = M._truncate_prompt(display, available)
+  local text_w = vim.fn.strdisplaywidth(prompt_text)
+  local gap = inner_width - left_pad - text_w - tag_w - right_pad
+  return " " .. prompt_text .. string.rep(" ", math.max(gap, 0)) .. tag .. " "
+end
+
 local ACTIVE_HL = "BotglueActiveBorder"
 
 local function setup_highlights()
@@ -257,10 +281,20 @@ function M._open_full(entries, on_submit)
   end
   vim.api.nvim_buf_set_lines(container_buf, 0, -1, false, container_lines)
 
-  -- Highlight divider lines
+  -- Dynamic divider highlights for active panel indication
   local divider_ns = vim.api.nvim_create_namespace("botglue_divider")
-  vim.api.nvim_buf_add_highlight(container_buf, divider_ns, "FloatBorder", 1, 0, -1)
-  vim.api.nvim_buf_add_highlight(container_buf, divider_ns, "FloatBorder", 2 + list_height, 0, -1)
+  local divider_rows = {
+    list = 1,
+    prompt = 2 + list_height,
+  }
+
+  local function update_divider_highlight(active_panel)
+    vim.api.nvim_buf_clear_namespace(container_buf, divider_ns, 0, -1)
+    for panel, row in pairs(divider_rows) do
+      local hl = (panel == active_panel) and ACTIVE_HL or "FloatBorder"
+      vim.api.nvim_buf_add_highlight(container_buf, divider_ns, hl, row, 0, -1)
+    end
+  end
 
   local function make_footer()
     return " [" .. draft.model .. "] "
@@ -450,6 +484,7 @@ function M._open_full(entries, on_submit)
   local function focus_list()
     if vim.api.nvim_win_is_valid(list_win) then
       vim.api.nvim_set_current_win(list_win)
+      update_divider_highlight("list")
     end
   end
 
@@ -457,6 +492,7 @@ function M._open_full(entries, on_submit)
     if vim.api.nvim_win_is_valid(filter_win) then
       vim.api.nvim_set_current_win(filter_win)
       vim.cmd("startinsert!")
+      update_divider_highlight(nil)
     end
   end
 
@@ -466,6 +502,7 @@ function M._open_full(entries, on_submit)
     end
     prompt_handle.set_draft(draft.text)
     prompt_handle.focus()
+    update_divider_highlight("prompt")
   end
 
   -- === Actions ===
