@@ -73,7 +73,7 @@ require("botglue").setup({
 - `Esc`/`q` — close
 
 **Filter (Panel 1):**
-- Type — fuzzy filter history list
+- Type — fuzzy filter history list with match highlighting
 - `Ctrl+J`/`Ctrl+K` — navigate list without leaving filter
 - `Enter` — select top match, move to prompt editor
 - `Esc` — clear filter, return to list
@@ -82,13 +82,29 @@ require("botglue").setup({
 **Prompt editor (Panel 3):**
 - `Enter` — new line (insert mode) / submit (normal mode)
 - `Ctrl+S` — submit prompt (any mode)
-- `Shift+Tab` — cycle model (opus → sonnet → haiku)
+- `Shift+Tab` — cycle model (opus -> sonnet -> haiku)
 - `Tab` — return to history list
 - `q` / `Esc` — close (normal mode)
 
 ### Inline Progress Display
 
 While processing, extmarks appear above and below your selection showing a spinner and Claude's activity (tool calls). The selection remains untouched until the result arrives.
+
+## Architecture
+
+```
+lua/botglue/
+  init.lua        -- setup(), run(), keymap registration
+  config.lua      -- defaults (models, timeout, max_turns)
+  picker.lua      -- three-panel float UI: filter, history, prompt
+  ui.lua          -- prompt editor window factory, model cycling
+  operations.lua  -- visual selection handling, run orchestration
+  claude.lua      -- CLI command builder, stream-json parser
+  display.lua     -- extmark-based inline progress (spinner, tool activity)
+  history.lua     -- JSON persistence with frequency sorting
+```
+
+**UI layout:** A single container frame ("BotGlue" title, model badge footer) holds three borderless inner panels separated by labeled dividers. Active panel indicated by yellow divider highlight. Autocomplete disabled in all panels. When history is empty, only the prompt editor opens.
 
 ## Custom Keymaps
 
@@ -98,6 +114,15 @@ If you disable default keymaps:
 require("botglue").setup({ default_keymaps = false })
 
 vim.keymap.set("x", "<leader>pp", require("botglue").run, { desc = "Botglue: run" })
+```
+
+## Development
+
+```bash
+make fmt        # format with stylua
+make lint       # run luacheck
+make test       # run 80 tests with plenary.nvim
+make pr-ready   # lint + test + format check
 ```
 
 ## Philosophy
