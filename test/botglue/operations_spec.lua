@@ -190,11 +190,8 @@ describe("botglue.operations", function()
           mock_claude._last_prompt = prompt
           mock_claude._last_ctx = ctx
           mock_claude._last_observer = observer
+          return { job_id = 1 }
         end,
-        cancel = function()
-          mock_claude._cancelled = true
-        end,
-        _cancelled = false,
       }
       package.loaded["botglue.claude"] = mock_claude
 
@@ -324,75 +321,4 @@ describe("botglue.operations", function()
     end)
   end)
 
-  describe("cancel", function()
-    local mock_claude
-    local original_notify
-
-    before_each(function()
-      package.loaded["botglue.operations"] = nil
-      package.loaded["botglue.config"] = nil
-      package.loaded["botglue.claude"] = nil
-      package.loaded["botglue.display"] = nil
-
-      local config = require("botglue.config")
-      config.setup()
-
-      -- Stub vim.notify to suppress output
-      original_notify = vim.notify
-      vim.notify = function() end
-
-      mock_claude = {
-        start = function() end,
-        cancel = function()
-          mock_claude._cancelled = true
-        end,
-        _cancelled = false,
-      }
-      package.loaded["botglue.claude"] = mock_claude
-
-      package.loaded["botglue.display"] = {
-        Mark = {
-          above = function()
-            return { set_virtual_text = function() end, delete = function() end }
-          end,
-          at = function()
-            return { set_virtual_text = function() end, delete = function() end }
-          end,
-        },
-        RequestStatus = {
-          new = function()
-            return { start = function() end, stop = function() end, push = function() end }
-          end,
-        },
-      }
-
-      operations = require("botglue.operations")
-    end)
-
-    after_each(function()
-      vim.notify = original_notify
-    end)
-
-    it("calls claude.cancel", function()
-      operations.cancel()
-      assert.is_true(mock_claude._cancelled)
-    end)
-
-    it("runs cleanup function when set", function()
-      local cleaned = false
-      operations._cleanup = function()
-        cleaned = true
-      end
-      operations.cancel()
-      assert.is_true(cleaned)
-      assert.is_nil(operations._cleanup)
-    end)
-
-    it("does not crash when no cleanup set", function()
-      operations._cleanup = nil
-      assert.has_no.errors(function()
-        operations.cancel()
-      end)
-    end)
-  end)
 end)
