@@ -4,6 +4,41 @@ local ui = require("botglue.ui")
 
 local M = {}
 
+--- Build a horizontal divider line: "── Label ────────" padded to width.
+--- @param label string section label (e.g. "Recent prompts")
+--- @param width number target display width
+--- @return string
+function M._make_divider(label, width)
+  if label == "" then
+    return string.rep("─", width)
+  end
+  local prefix = "── " .. label .. " "
+  local prefix_w = vim.fn.strdisplaywidth(prefix)
+  if prefix_w >= width then
+    return vim.fn.strcharpart(prefix, 0, width)
+  end
+  return prefix .. string.rep("─", width - prefix_w)
+end
+
+--- Truncate prompt text to fit within max_width display columns.
+--- Uses strdisplaywidth for correct UTF-8/CJK handling.
+--- @param text string prompt text
+--- @param max_width number max display columns
+--- @return string truncated text (with "…" suffix if truncated)
+function M._truncate_prompt(text, max_width)
+  if vim.fn.strdisplaywidth(text) <= max_width then
+    return text
+  end
+  local chars = vim.fn.strchars(text)
+  for i = chars, 1, -1 do
+    local candidate = vim.fn.strcharpart(text, 0, i) .. "…"
+    if vim.fn.strdisplaywidth(candidate) <= max_width then
+      return candidate
+    end
+  end
+  return "…"
+end
+
 local ACTIVE_HL = "BotglueActiveBorder"
 
 local function setup_highlights()
