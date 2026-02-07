@@ -95,7 +95,6 @@ function M._open_prompt_only(on_submit)
     focusable = false,
     zindex = 40,
   })
-  vim.api.nvim_set_option_value("winhl", "FloatBorder:" .. ACTIVE_HL, { win = container_win })
 
   -- Prompt panel (inside container, no border)
   local handle = ui.create_prompt_window({
@@ -282,7 +281,6 @@ function M._open_full(entries, on_submit)
     focusable = false,
     zindex = 40,
   })
-  vim.api.nvim_set_option_value("winhl", "FloatBorder:" .. ACTIVE_HL, { win = container_win })
 
   -- Inner panel positions (offset by container border)
   local inner_col = col + 1
@@ -295,7 +293,8 @@ function M._open_full(entries, on_submit)
   vim.bo[filter_buf].completefunc = ""
   vim.bo[filter_buf].omnifunc = ""
   vim.bo[filter_buf].complete = ""
-  vim.b[filter_buf].cmp = false
+  vim.b[filter_buf].cmp_enabled = false
+  vim.b[filter_buf].completion = false
   local filter_win = vim.api.nvim_open_win(filter_buf, false, {
     relative = "editor",
     width = inner_width,
@@ -315,7 +314,8 @@ function M._open_full(entries, on_submit)
   vim.bo[list_buf].completefunc = ""
   vim.bo[list_buf].omnifunc = ""
   vim.bo[list_buf].complete = ""
-  vim.b[list_buf].cmp = false
+  vim.b[list_buf].cmp_enabled = false
+  vim.b[list_buf].completion = false
   local list_win = vim.api.nvim_open_win(list_buf, false, {
     relative = "editor",
     width = inner_width,
@@ -346,7 +346,8 @@ function M._open_full(entries, on_submit)
     local lines = {}
     local available = inner_width - 2
     for _, entry in ipairs(filtered_entries) do
-      local prompt_text = M._truncate_prompt(entry.prompt, available)
+      local display = entry.prompt:gsub("\n", " ")
+      local prompt_text = M._truncate_prompt(display, available)
       table.insert(lines, "  " .. prompt_text)
     end
     if #lines == 0 then

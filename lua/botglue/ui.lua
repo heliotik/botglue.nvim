@@ -85,7 +85,8 @@ function M.create_prompt_window(opts)
   vim.bo[buf].completefunc = ""
   vim.bo[buf].omnifunc = ""
   vim.bo[buf].complete = ""
-  vim.b[buf].cmp = false
+  vim.b[buf].cmp_enabled = false
+  vim.b[buf].completion = false
 
   local handle = {}
   handle.buf = buf
