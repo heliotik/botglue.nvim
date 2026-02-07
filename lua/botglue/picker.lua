@@ -222,6 +222,8 @@ function M._open_full(entries, on_submit)
   local closed = false
   local autocmd_ids = {}
   local match_positions = {}
+  local list_ns = vim.api.nvim_create_namespace("botglue_list")
+  local filter_hl_ns = vim.api.nvim_create_namespace("botglue_filter_hl")
 
   -- Layout: container interior rows
   local filter_height = 1
@@ -353,7 +355,6 @@ function M._open_full(entries, on_submit)
     vim.bo[list_buf].modifiable = true
     vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, lines)
     -- Model tags as right-aligned extmarks
-    local list_ns = vim.api.nvim_create_namespace("botglue_list")
     vim.api.nvim_buf_clear_namespace(list_buf, list_ns, 0, -1)
     for i, entry in ipairs(filtered_entries) do
       vim.api.nvim_buf_set_extmark(list_buf, list_ns, i - 1, 0, {
@@ -362,7 +363,6 @@ function M._open_full(entries, on_submit)
       })
     end
     -- Highlight fuzzy match positions
-    local filter_hl_ns = vim.api.nvim_create_namespace("botglue_filter_hl")
     vim.api.nvim_buf_clear_namespace(list_buf, filter_hl_ns, 0, -1)
     for i, entry in ipairs(filtered_entries) do
       local positions = match_positions[entry.prompt]
@@ -402,6 +402,19 @@ function M._open_full(entries, on_submit)
     end
   end
 
+  -- Filter placeholder
+  local placeholder_ns = vim.api.nvim_create_namespace("botglue_filter_placeholder")
+  local function update_filter_placeholder()
+    vim.api.nvim_buf_clear_namespace(filter_buf, placeholder_ns, 0, -1)
+    local text = vim.api.nvim_buf_get_lines(filter_buf, 0, 1, false)[1] or ""
+    if text == "" then
+      vim.api.nvim_buf_set_extmark(filter_buf, placeholder_ns, 0, 0, {
+        virt_text = { { "Filter recent prompts - press / to focus", "Comment" } },
+        virt_text_pos = "overlay",
+      })
+    end
+  end
+
   local function apply_filter()
     local text = vim.trim(vim.api.nvim_buf_get_lines(filter_buf, 0, 1, false)[1] or "")
     match_positions = {}
@@ -428,6 +441,7 @@ function M._open_full(entries, on_submit)
     selected_idx = 1
     render_list()
     update_preview()
+    update_filter_placeholder()
   end
 
   -- === Focus management ===
@@ -644,19 +658,6 @@ function M._open_full(entries, on_submit)
         end,
       })
     )
-  end
-
-  -- Filter placeholder
-  local placeholder_ns = vim.api.nvim_create_namespace("botglue_filter_placeholder")
-  local function update_filter_placeholder()
-    vim.api.nvim_buf_clear_namespace(filter_buf, placeholder_ns, 0, -1)
-    local text = vim.api.nvim_buf_get_lines(filter_buf, 0, 1, false)[1] or ""
-    if text == "" then
-      vim.api.nvim_buf_set_extmark(filter_buf, placeholder_ns, 0, 0, {
-        virt_text = { { "Filter recent prompts - press / to focus", "Comment" } },
-        virt_text_pos = "overlay",
-      })
-    end
   end
 
   -- === Initial state ===
