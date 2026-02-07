@@ -228,6 +228,7 @@ function M._open_full(entries, on_submit)
   local draft = { text = "", model = config.options.model }
   local closed = false
   local autocmd_ids = {}
+  local match_positions = {}
 
   -- Layout: container interior rows
   local filter_height = 1
@@ -367,6 +368,26 @@ function M._open_full(entries, on_submit)
         virt_text_pos = "right_align",
       })
     end
+    -- Highlight fuzzy match positions
+    local filter_hl_ns = vim.api.nvim_create_namespace("botglue_filter_hl")
+    vim.api.nvim_buf_clear_namespace(list_buf, filter_hl_ns, 0, -1)
+    for i, entry in ipairs(filtered_entries) do
+      local positions = match_positions[entry.prompt]
+      if positions then
+        for _, pos in ipairs(positions) do
+          local byte_pos = pos + 2
+          pcall(
+            vim.api.nvim_buf_add_highlight,
+            list_buf,
+            filter_hl_ns,
+            "Search",
+            i - 1,
+            byte_pos,
+            byte_pos + 1
+          )
+        end
+      end
+    end
     vim.bo[list_buf].modifiable = false
     selected_idx = math.max(1, math.min(selected_idx, #filtered_entries))
     if vim.api.nvim_win_is_valid(list_win) and #filtered_entries > 0 then
@@ -390,19 +411,26 @@ function M._open_full(entries, on_submit)
 
   local function apply_filter()
     local text = vim.trim(vim.api.nvim_buf_get_lines(filter_buf, 0, 1, false)[1] or "")
+    match_positions = {}
     if text == "" then
       filtered_entries = all_entries
     else
       local prompts = vim.tbl_map(function(e)
         return e.prompt
       end, all_entries)
-      local matched_set = {}
-      for _, m in ipairs(vim.fn.matchfuzzy(prompts, text)) do
-        matched_set[m] = true
+      local result = vim.fn.matchfuzzypos(prompts, text)
+      local matched = result[1]
+      local positions = result[2]
+      local matched_map = {}
+      for i, m in ipairs(matched) do
+        matched_map[m] = positions[i]
       end
       filtered_entries = vim.tbl_filter(function(e)
-        return matched_set[e.prompt]
+        return matched_map[e.prompt] ~= nil
       end, all_entries)
+      for _, e in ipairs(filtered_entries) do
+        match_positions[e.prompt] = matched_map[e.prompt]
+      end
     end
     selected_idx = 1
     render_list()
