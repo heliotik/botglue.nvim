@@ -63,6 +63,24 @@ function M._format_list_line(prompt, model, inner_width)
   return " " .. prompt_text .. string.rep(" ", math.max(gap, 0)) .. tag .. " "
 end
 
+--- Convert matchfuzzypos character positions to byte ranges for nvim_buf_add_highlight.
+--- @param line_text string the full padded line in the buffer
+--- @param char_positions number[] 0-indexed character positions from matchfuzzypos
+--- @param left_pad number number of padding characters before the prompt text
+--- @return table[] list of {byte_start, byte_end} pairs (0-indexed)
+function M._char_to_byte_positions(line_text, char_positions, left_pad)
+  local result = {}
+  for _, char_pos in ipairs(char_positions) do
+    local line_char_pos = char_pos + left_pad
+    local byte_start = vim.fn.byteidx(line_text, line_char_pos)
+    local byte_end = vim.fn.byteidx(line_text, line_char_pos + 1)
+    if byte_start >= 0 and byte_end >= 0 then
+      table.insert(result, { byte_start, byte_end })
+    end
+  end
+  return result
+end
+
 local ACTIVE_HL = "BotglueActiveBorder"
 
 local function setup_highlights()

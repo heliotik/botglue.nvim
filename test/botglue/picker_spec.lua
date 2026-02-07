@@ -115,4 +115,36 @@ describe("botglue.picker", function()
       assert.truthy(line:match("no matches"))
     end)
   end)
+
+  describe("_char_to_byte_positions", function()
+    it("converts ASCII positions with left_pad offset", function()
+      -- " hello world" with left_pad=1
+      -- char_positions {0, 6} → 'h' at char 0, 'w' at char 6 in "hello world"
+      -- In padded line: char 0+1=1, char 6+1=7
+      -- ASCII: byte == char index, so {1,2} and {7,8}
+      local result = picker._char_to_byte_positions(" hello world", { 0, 6 }, 1)
+      assert.same({ { 1, 2 }, { 7, 8 } }, result)
+    end)
+
+    it("converts Cyrillic (2-byte) positions correctly", function()
+      -- "привет" = 6 chars, each 2 bytes
+      -- " привет" with left_pad=1
+      -- char_positions {0, 3} → 'п' at char 0, 'в' at char 3
+      -- In padded line: char 0+1=1, char 3+1=4
+      -- byteidx(" привет", 1) = 1, byteidx(" привет", 2) = 3
+      -- byteidx(" привет", 4) = 7, byteidx(" привет", 5) = 9
+      local result = picker._char_to_byte_positions(" привет", { 0, 3 }, 1)
+      assert.same({ { 1, 3 }, { 7, 9 } }, result)
+    end)
+
+    it("skips out-of-bounds positions", function()
+      local result = picker._char_to_byte_positions(" hi", { 0, 99 }, 1)
+      assert.same({ { 1, 2 } }, result)
+    end)
+
+    it("returns empty list for empty positions", function()
+      local result = picker._char_to_byte_positions(" hello", {}, 1)
+      assert.same({}, result)
+    end)
+  end)
 end)
