@@ -8,18 +8,24 @@ local M = {}
 function M.build_system_prompt(ctx)
   return string.format(
     [[You are an inline code editor inside Neovim.
-The user selected a region in file: %s (lines %d-%d).
-Filetype: %s. Project: %s.
+File: %s (lines %d-%d). Filetype: %s. Project: %s.
 
-Read the file if you need surrounding context to understand the code.
-Modify ONLY the selected region based on the user's request.
-Return ONLY the replacement code — no explanations, no markdown fences, no extra text.
-The output will directly replace the selection in the editor.]],
+Selected text:
+```
+%s
+```
+
+You may use Read, Grep, Glob tools to understand surrounding context.
+DO NOT use Write or Edit tools. DO NOT modify files directly.
+Output ONLY the replacement text as your response — nothing else.
+No explanations, no markdown fences, no commentary.
+Your entire response will directly replace the selection in the editor.]],
     ctx.filepath,
     ctx.start_line,
     ctx.end_line,
     ctx.filetype,
-    ctx.project
+    ctx.project,
+    ctx.selected_text or ""
   )
 end
 
@@ -68,6 +74,7 @@ function M.start(prompt, ctx, observer)
   end
 
   handle.job_id = vim.fn.jobstart(cmd, {
+    stdin = "null",
     stdout_buffered = false,
     stderr_buffered = false,
     on_stdout = function(_, data)
@@ -102,11 +109,11 @@ function M.start(prompt, ctx, observer)
       end
 
       vim.schedule(function()
-        local result = M._extract_result(stdout_chunks)
-        if result and result ~= "" then
+        local result, err = M._extract_result(stdout_chunks)
+        if result then
           observer.on_complete(nil, result)
         else
-          observer.on_complete("Empty response from Claude", nil)
+          observer.on_complete(err or "Empty response from Claude", nil)
         end
       end)
     end,
@@ -134,32 +141,46 @@ function M.start(prompt, ctx, observer)
 end
 
 --- Extract the final text result from stream-json chunks.
+--- Returns (result, error): exactly one is non-nil.
 --- @param chunks string[]
---- @return string|nil
+--- @return string|nil result
+--- @return string|nil error
 function M._extract_result(chunks)
-  local result_parts = {}
+  local last_assistant_text = nil
 
   for _, chunk in ipairs(chunks) do
     local ok, parsed = pcall(vim.json.decode, chunk)
     if ok and parsed then
-      if parsed.type == "result" and parsed.result then
-        return parsed.result
+      -- Result chunk is authoritative — use it and stop.
+      if parsed.type == "result" then
+        if parsed.result and parsed.result ~= "" then
+          return parsed.result, nil
+        end
+        -- Result chunk exists but no result text — report the subtype as error.
+        local reason = parsed.subtype or "unknown"
+        return nil, "Claude finished with: " .. reason
       end
+      -- Track text from assistant messages (only the last one matters).
       if parsed.type == "assistant" and parsed.message and parsed.message.content then
+        local texts = {}
         for _, block in ipairs(parsed.message.content) do
           if block.type == "text" and block.text then
-            table.insert(result_parts, block.text)
+            table.insert(texts, block.text)
           end
+        end
+        if #texts > 0 then
+          last_assistant_text = table.concat(texts, "")
         end
       end
     end
   end
 
-  if #result_parts > 0 then
-    return table.concat(result_parts, "")
+  -- No result chunk at all (process killed mid-stream) — best-effort fallback.
+  if last_assistant_text and last_assistant_text ~= "" then
+    return last_assistant_text, nil
   end
 
-  return nil
+  return nil, "Empty response from Claude"
 end
 
 return M

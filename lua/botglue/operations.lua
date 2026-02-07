@@ -115,6 +115,7 @@ function M.run(prompt, model, sel)
     filetype = vim.bo[bufnr].filetype,
     project = vim.fn.fnamemodify(vim.fn.getcwd(), ":t"),
     model = model,
+    selected_text = sel.text,
   }
   -- Use relative path if possible
   local cwd = vim.fn.getcwd() .. "/"
