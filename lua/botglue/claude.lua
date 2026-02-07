@@ -140,16 +140,15 @@ function M._extract_result(chunks)
   for _, chunk in ipairs(chunks) do
     local ok, parsed = pcall(vim.json.decode, chunk)
     if ok and parsed then
-      if parsed.result then
+      if parsed.type == "result" and parsed.result then
         return parsed.result
       end
-      if
-        parsed.type == "stream_event"
-        and parsed.event
-        and parsed.event.delta
-        and parsed.event.delta.type == "text_delta"
-      then
-        table.insert(result_parts, parsed.event.delta.text)
+      if parsed.type == "assistant" and parsed.message and parsed.message.content then
+        for _, block in ipairs(parsed.message.content) do
+          if block.type == "text" and block.text then
+            table.insert(result_parts, block.text)
+          end
+        end
       end
     end
   end
