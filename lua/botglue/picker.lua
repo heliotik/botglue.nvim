@@ -229,76 +229,144 @@ function M._open_full(entries, on_submit)
   local closed = false
   local autocmd_ids = {}
 
-  -- Panel dimensions
+  -- Layout: container interior rows
+  local filter_height = 1
   local list_height = math.min(#entries, 10)
-  -- Vertical stacking: each window adds 2 rows for border (top + bottom)
-  local filter_row = top_row
-  local list_row = filter_row + 1 + 2
-  local prompt_row = list_row + list_height + 2
+  local prompt_height = 5
+  local divider_height = 1
+  local container_height = filter_height
+    + divider_height
+    + list_height
+    + divider_height
+    + prompt_height
 
-  -- === Create windows ===
+  -- Container (background frame)
+  local container_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[container_buf].bufhidden = "wipe"
 
-  -- Panel 1: Filter
+  -- Build container buffer: empty rows + divider lines
+  local container_lines = {}
+  -- Row 0: filter area (covered by filter_win)
+  table.insert(container_lines, string.rep(" ", width))
+  -- Row 1: divider "── Recent prompts ──────"
+  table.insert(container_lines, M._make_divider("Recent prompts", width))
+  -- Rows 2..1+list_height: list area (covered by list_win)
+  for _ = 1, list_height do
+    table.insert(container_lines, string.rep(" ", width))
+  end
+  -- Row 2+list_height: divider "── Prompt ──────"
+  table.insert(container_lines, M._make_divider("Prompt", width))
+  -- Rows 3+list_height..end: prompt area (covered by prompt_win)
+  for _ = 1, prompt_height do
+    table.insert(container_lines, string.rep(" ", width))
+  end
+  vim.api.nvim_buf_set_lines(container_buf, 0, -1, false, container_lines)
+
+  -- Highlight divider lines
+  local divider_ns = vim.api.nvim_create_namespace("botglue_divider")
+  vim.api.nvim_buf_add_highlight(container_buf, divider_ns, "FloatBorder", 1, 0, -1)
+  vim.api.nvim_buf_add_highlight(container_buf, divider_ns, "FloatBorder", 2 + list_height, 0, -1)
+
+  local function make_footer()
+    return " [" .. draft.model .. "] "
+  end
+
+  local container_win = vim.api.nvim_open_win(container_buf, false, {
+    relative = "editor",
+    width = width,
+    height = container_height,
+    row = top_row,
+    col = col,
+    style = "minimal",
+    border = "rounded",
+    title = " BotGlue ",
+    title_pos = "center",
+    footer = make_footer(),
+    footer_pos = "right",
+    focusable = false,
+    zindex = 40,
+  })
+  vim.api.nvim_set_option_value("winhl", "FloatBorder:" .. ACTIVE_HL, { win = container_win })
+
+  -- Inner panel positions (offset by container border)
+  local inner_col = col + 1
+  local inner_width = width
+
+  -- Panel 1: Filter (row 0 inside container)
   local filter_buf = vim.api.nvim_create_buf(false, true)
   vim.bo[filter_buf].bufhidden = "wipe"
+  vim.bo[filter_buf].buftype = "nofile"
+  vim.bo[filter_buf].completefunc = ""
+  vim.bo[filter_buf].omnifunc = ""
+  vim.bo[filter_buf].complete = ""
+  vim.b[filter_buf].cmp = false
   local filter_win = vim.api.nvim_open_win(filter_buf, false, {
     relative = "editor",
-    width = width,
-    height = 1,
-    row = filter_row,
-    col = col,
+    width = inner_width,
+    height = filter_height,
+    row = top_row + 1,
+    col = inner_col,
     style = "minimal",
-    border = "rounded",
-    title = " Botglue ",
-    title_pos = "center",
+    border = "none",
+    zindex = 50,
   })
 
-  -- Panel 2: List
+  -- Panel 2: List (row 2 inside container = after filter + divider)
   local list_buf = vim.api.nvim_create_buf(false, true)
   vim.bo[list_buf].bufhidden = "wipe"
+  vim.bo[list_buf].buftype = "nofile"
   vim.bo[list_buf].modifiable = false
+  vim.bo[list_buf].completefunc = ""
+  vim.bo[list_buf].omnifunc = ""
+  vim.bo[list_buf].complete = ""
+  vim.b[list_buf].cmp = false
   local list_win = vim.api.nvim_open_win(list_buf, false, {
     relative = "editor",
-    width = width,
+    width = inner_width,
     height = list_height,
-    row = list_row,
-    col = col,
+    row = top_row + 1 + filter_height + divider_height,
+    col = inner_col,
     style = "minimal",
-    border = "rounded",
+    border = "none",
+    zindex = 50,
   })
   vim.wo[list_win].cursorline = true
 
-  -- Panel 3: Prompt (via ui.lua factory)
+  -- Panel 3: Prompt (after list + second divider)
   local prompt_handle = ui.create_prompt_window({
-    width = width,
-    row = prompt_row,
-    col = col,
+    width = inner_width,
+    row = top_row + 1 + filter_height + divider_height + list_height + divider_height,
+    col = inner_col,
     model = draft.model,
     enter = false,
+    no_border = true,
+    no_footer = true,
+    zindex = 50,
   })
 
   -- === Core functions ===
 
   local function render_list()
     local lines = {}
+    local available = inner_width - 2
     for _, entry in ipairs(filtered_entries) do
-      local prompt_text = entry.prompt
-      local model_tag = "[" .. entry.model .. "]"
-      local available = width - 4 - #model_tag - 1
-      if #prompt_text > available then
-        prompt_text = prompt_text:sub(1, available - 1) .. "…"
-      end
-      local padding = available - #prompt_text + 1
-      if padding < 1 then
-        padding = 1
-      end
-      table.insert(lines, "  " .. prompt_text .. string.rep(" ", padding) .. model_tag)
+      local prompt_text = M._truncate_prompt(entry.prompt, available)
+      table.insert(lines, "  " .. prompt_text)
     end
     if #lines == 0 then
       lines = { "  (no matches)" }
     end
     vim.bo[list_buf].modifiable = true
     vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, lines)
+    -- Model tags as right-aligned extmarks
+    local list_ns = vim.api.nvim_create_namespace("botglue_list")
+    vim.api.nvim_buf_clear_namespace(list_buf, list_ns, 0, -1)
+    for i, entry in ipairs(filtered_entries) do
+      vim.api.nvim_buf_set_extmark(list_buf, list_ns, i - 1, 0, {
+        virt_text = { { "[" .. entry.model .. "]", "Comment" } },
+        virt_text_pos = "right_align",
+      })
+    end
     vim.bo[list_buf].modifiable = false
     selected_idx = math.max(1, math.min(selected_idx, #filtered_entries))
     if vim.api.nvim_win_is_valid(list_win) and #filtered_entries > 0 then
@@ -344,18 +412,12 @@ function M._open_full(entries, on_submit)
   -- === Focus management ===
 
   local function focus_list()
-    set_border_hl(filter_win, "FloatBorder")
-    set_border_hl(list_win, ACTIVE_HL)
-    prompt_handle.set_border_hl("FloatBorder")
     if vim.api.nvim_win_is_valid(list_win) then
       vim.api.nvim_set_current_win(list_win)
     end
   end
 
   local function focus_filter()
-    set_border_hl(filter_win, ACTIVE_HL)
-    set_border_hl(list_win, "FloatBorder")
-    prompt_handle.set_border_hl("FloatBorder")
     if vim.api.nvim_win_is_valid(filter_win) then
       vim.api.nvim_set_current_win(filter_win)
       vim.cmd("startinsert!")
@@ -366,9 +428,6 @@ function M._open_full(entries, on_submit)
     if selected_text then
       draft.text = selected_text
     end
-    set_border_hl(filter_win, "FloatBorder")
-    set_border_hl(list_win, "FloatBorder")
-    prompt_handle.set_border_hl(ACTIVE_HL)
     prompt_handle.set_draft(draft.text)
     prompt_handle.focus()
   end
@@ -389,6 +448,18 @@ function M._open_full(entries, on_submit)
     end
     if vim.api.nvim_win_is_valid(filter_win) then
       vim.api.nvim_win_close(filter_win, true)
+    end
+    if vim.api.nvim_win_is_valid(container_win) then
+      vim.api.nvim_win_close(container_win, true)
+    end
+  end
+
+  local function update_container_footer()
+    if vim.api.nvim_win_is_valid(container_win) then
+      vim.api.nvim_win_set_config(container_win, {
+        footer = make_footer(),
+        footer_pos = "right",
+      })
     end
   end
 
@@ -475,6 +546,8 @@ function M._open_full(entries, on_submit)
   vim.keymap.set({ "i", "n" }, "<C-s>", submit_prompt, { buffer = pbuf })
   vim.keymap.set({ "i", "n" }, "<S-Tab>", function()
     prompt_handle.cycle_model()
+    draft.model = prompt_handle.get_model()
+    update_container_footer()
   end, { buffer = pbuf })
   vim.keymap.set("n", "<Tab>", function()
     draft.text = prompt_handle.get_text()
@@ -524,10 +597,52 @@ function M._open_full(entries, on_submit)
     })
   )
 
+  -- Close on focus loss
+  local our_wins = { filter_win, list_win, prompt_handle.win, container_win }
+  for _, buf in ipairs({ filter_buf, list_buf, prompt_handle.buf }) do
+    table.insert(
+      autocmd_ids,
+      vim.api.nvim_create_autocmd("WinLeave", {
+        buffer = buf,
+        callback = function()
+          if closed then
+            return
+          end
+          vim.schedule(function()
+            if closed then
+              return
+            end
+            local cur = vim.api.nvim_get_current_win()
+            for _, w in ipairs(our_wins) do
+              if cur == w then
+                return
+              end
+            end
+            close_all()
+          end)
+        end,
+      })
+    )
+  end
+
+  -- Filter placeholder
+  local placeholder_ns = vim.api.nvim_create_namespace("botglue_filter_placeholder")
+  local function update_filter_placeholder()
+    vim.api.nvim_buf_clear_namespace(filter_buf, placeholder_ns, 0, -1)
+    local text = vim.api.nvim_buf_get_lines(filter_buf, 0, 1, false)[1] or ""
+    if text == "" then
+      vim.api.nvim_buf_set_extmark(filter_buf, placeholder_ns, 0, 0, {
+        virt_text = { { "Filter recent prompts - press / to focus", "Comment" } },
+        virt_text_pos = "overlay",
+      })
+    end
+  end
+
   -- === Initial state ===
 
   render_list()
   update_preview()
+  update_filter_placeholder()
   focus_list()
 end
 
