@@ -124,10 +124,11 @@ function M.run(prompt, model, sel)
 
   claude.start(prompt, ctx, {
     on_stdout = function(parsed)
-      if parsed.type == "stream_event" and parsed.event then
-        local delta = parsed.event.delta
-        if delta and delta.type == "tool_use" then
-          top_status:push("Using " .. (delta.name or "tool") .. "...")
+      if parsed.type == "assistant" and parsed.message and parsed.message.content then
+        for _, block in ipairs(parsed.message.content) do
+          if block.type == "tool_use" and block.name then
+            top_status:push("Using " .. block.name .. "...")
+          end
         end
       end
     end,
